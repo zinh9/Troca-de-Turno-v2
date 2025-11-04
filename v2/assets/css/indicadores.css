@@ -1,0 +1,136 @@
+/* Toques visuais */
+* {
+    font-family: 'Oswald', sans-serif;
+}
+
+.card { backdrop-filter: saturate(1.05); }
+.card-header { border-bottom-color: rgba(255,255,255,.08); }
+.nav-pills .nav-link { font-weight: 600; }
+.nav-pills .nav-link.active { color:#0b1412; }
+
+/* Botão topo */
+#toTop { transition: opacity .2s ease, transform .2s ease; transform: translateY(6px); }
+#toTop.opacity-100 { transform: translateY(0); }
+
+.table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+.tableFixHead thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #f8f9fa !important;
+    color: #212529;
+    border-bottom: 2px solid #dee2e6;
+}
+.table-rounded {
+    border-spacing: 0;
+}
+.table-title-row th {
+    background-color: rgba(50, 37, 41, 0.8);
+    color: white;
+    font-size: 1.25rem;
+    text-align: center;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+.table-dark th,
+.table-dark td {
+    vertical-align: middle;
+}
+.table-dark tbody tr:hover {
+    background-color: #343a40 !important;
+    color: #fff;
+}
+.table-dark td {
+    font-size: 0.9rem;
+}
+.table-dark th {
+    font-size: 1rem;
+    font-weight: 600;
+}
+.table-dark tbody td {
+    font-size: 1rem;
+}
+.table-dark tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+.table-dark tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+/* Paleta para o tema escuro */
+:root{
+    --tabbar-bg: #0f1215;         /* fundo da barra */
+    --tab-inactive: #1b2026;      /* abas inativas */
+    --tab-hover: #252c34;         /* hover das inativas */
+    --tab-active: #313943;        /* aba ativa (mais clara) */
+    --tab-border: #2b323a;        /* borda geral */
+    --tab-text: #d9e1ea;          /* texto abas */
+}
+
+/* Container da barra (faixa) */
+.tabbar-browser{
+  background: var(--tabbar-bg);
+  border: 1px solid var(--tab-border);
+  border-radius: .75rem .75rem 0 0;
+}
+
+/* Zona interna para dar “respiro” nas abas */
+.tabbar-inner{
+  background: transparent;
+  border-bottom: 1px solid var(--tab-border);
+  border-radius: .75rem .75rem 0 0;
+}
+
+/* Lista de abas: rolagem horizontal em telas pequenas */
+.tabbar-nav{
+  scrollbar-width: thin;
+}
+.tabbar-nav::-webkit-scrollbar{ height: 6px; }
+.tabbar-nav::-webkit-scrollbar-thumb{ background: #3a434d; border-radius: 4px; }
+
+/* Aba (nav-link) com cara de guia de navegador */
+.tabbar-browser .nav-link{
+  color: var(--tab-text);
+  background: var(--tab-inactive);
+  border: 1px solid var(--tab-border);
+  border-bottom: 0; /* “encaixa” com o conteúdo abaixo */
+  border-radius: .6rem .6rem 0 0;
+  padding: .55rem .9rem;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  white-space: nowrap;         /* evita quebrar texto */
+}
+
+.tabbar-browser .nav-link:hover{
+  background: var(--tab-hover);
+  color: #fff;
+}
+
+/* Aba ativa: mais clara e “fundida” ao conteúdo (sem degrau) */
+.tabbar-browser .nav-link.active{
+  background: var(--tab-active);
+  color: #fff;
+  border-color: var(--tab-border);
+  position: relative;
+}
+
+/* Remove a linha de separação entre aba ativa e o conteúdo */
+.tabbar-browser .nav-link.active::after{
+  content: "";
+  position: absolute;
+  left: -1px; right: -1px; bottom: -1px;
+  height: 1px; background: var(--tab-active);
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Opcional: deixa as abas levemente “elevadas” */
+.tabbar-browser .nav-link.active{
+  box-shadow: 0 .15rem .3rem rgba(0,0,0,.25) inset;
+}
+
+.row.flex-nowrap > .col { min-width: 0; }
