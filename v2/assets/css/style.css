@@ -1,0 +1,48 @@
+* {
+    font-family: 'Oswald', sans-serif;
+}
+
+.border-rounded {
+    border-collapse: separete;
+    border-spacing: 0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.rainbow-esgotado {
+    font-weight: bold;
+    background: linear-gradient(90deg,
+            #FF0000,
+            /* vermelho */
+            #FF8C00,
+            /* laranja */
+            #FFFF00,
+            /* amarelo */
+            #008000,
+            /* verde */
+            #0000FF,
+            /* azul */
+            #4B0082,
+            /* anil */
+            #EE82EE
+            /* violeta */
+        );
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    animation: pulse 3s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
