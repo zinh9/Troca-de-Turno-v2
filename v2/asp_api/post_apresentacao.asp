@@ -10,21 +10,41 @@ response.cachecontrol = "no-cache"
 response.addheader "Pragma", "no-cache"
 response.expires = -1
 
-dim matricula, supervisao, local, justificativa, confirmado
-dim conn, sql, rs, success, message
-
-matricula = "81053394" 'request.form("matricula")
-supervisao = "TORRE_A" 'request.form("supervisao")
-local = "Guarita_7" 'request.form("local")
-
+dim success, code, message, status, horarioApresentacaoISO
 success = false
+code = "ERRO_UNKNOWN"
 message = ""
+horarioApresentacao = ""
+status = ""
 
+dim matricula, supervisao, local
+dim confirmadoSupervisao, confirmadoTurno
+dim conn, sql, rs, rsRef, rsCount
+dim supervisaoOriginal, turnoOriginal, turnoAtual, horarioRegistro
+dim statusApresentacao, sqlInsert, sqlUpdateTurno
+
+' matricula = "81053394" 
+' supervisao =  "PV_AB" 
+' local = "Aroaba" 
+' confirmadoSupervisao = "1" 
+' confirmadoTurno = "0" 
+
+matricula = request.form("matricula")
+supervisao =  request.form("supervisao")
+local = request.form("local")
+confirmadoSupervisao = request.form("confirmarSupervisao")
+confirmadoTurno = request.form("confirmarTurno")
 
 on error resume next
 if supervisao = "TORRE_L" then supervisao = "Torre_L"
 
-if request.form("confirmado") = "" then confirmado = 0 else confirmado = request.form("confirmado") end if
+if matricula = "" or supervisao = "" or local = "" then
+    code = "ERROR_INVALID_INPUT"
+    message = "Matrícula, supervisão ou local não podem estar vazios!"
+
+    response.write "{""success"":""" & lcase(success) & """, ""code"":""" & code & """, ""message"":""" & EscapeJSON(message) & """, ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & """, ""status"":""" & status & """}"
+    response.end
+end if
 
 set conn = getConexao()
 
@@ -35,49 +55,117 @@ sql = "SELECT usuario_dss, supervisao, horario_login_dss " & _
 set rs = conn.execute(sql)
 
 if rs.eof then
-    success = false
-    message "Funcionário não encontrado ou turno NÃO registrado no DSS."
+    message = "Funcionário não encontrado ou turno NÃO registrado no DSS."
+    code = "ERROR_NOT_FOUND"
+
+    response.write "{""success"":""" & lcase(success) & """, ""code"":""" & code & """, ""message"":""" & EscapeJSON(message) & """, ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & """, ""status"":""" & status & """}"
+    response.end
 end if
 
-dim supervisaoOriginal, turno
-
 supervisaoOriginal = rs("supervisao")
-turno = rs("horario_login_dss")
+turnoOriginal = rs("horario_login_dss")
+rs.close
 
 sql = "SELECT COUNT(*) AS total "& _
     "FROM registros_apresentacao "& _
     "WHERE usuario_dss = '" & matricula & "' "& _
     "AND DateValue(data_hora_apresentacao) = Date()"
-set rs = conn.execute(sql)
+set rsCount = conn.execute(sql)
 
-if rs("total") <> "0" then
-    success = false
-    message = "Funcionário já cadastrado no turno atual."
+if not rsCount.eof then
+    if rsCount("total") <> 0 then
+        message = "Funcionário já cadastrado no turno atual."
+        code = "ERROR_DUPLICATE"
+    
+        response.write "{""success"":""" & lcase(success) & """, ""code"":""" & code & """, ""message"":""" & EscapeJSON(message) & """, ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & """, ""status"":""" & status & """}"
+        response.end
+    end if
+end if
+rsCount.close
+
+if supervisao <> supervisaoOriginal and confirmadoSupervisao <> "1" then
+    code = "CONFIRM_SUPERVISAO"
+    message = "Você está se apresentando em outra supervisão. Sua supervisão original é: " & supervisaoOriginal & ". Deseja continuar?"
+
+    response.write "{""success"":""" & lcase(success) & """, ""code"":""" & code & """, ""message"":""" & EscapeJSON(message) & """, ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & """, ""status"":""" & status & """}"
+    response.end
 end if
 
-'atualizaTurno = verificarTurno(turno)
+turnoAtual = verificarTurno(turnoOriginal)
 
-' if (turno <> atualizaTurno)  then
-'     success = false
-'     message "Atualizar|" & turno & "|" & atualizaTurno
-' end if
+if turnoAtual <> turnoOriginal then
+    if confirmadoTurno <> "1" then
+        code = "CONFIRM_TURNO"
+        message = "Seu turno (" & turnoOriginal & ") é diferente do turno atual (" & turnoAtual & "). Deseja atualizar seu turno?"
+    
+        response.write "{""success"":""" & lcase(success) & """, ""code"":""" & code & """, ""message"":""" & EscapeJSON(message) & """, ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & """, ""status"":""" & status & """}"
+        response.end
+    elseif confirmadoTurno = "1" then
+        sqlUpdateTurno = "UPDATE login_dss SET horario_login_dss = '" & turnoAtual & "' " & _
+        "WHERE usuario_dss = '" & matricula & "'"
+        conn.execute(sqlUpdateTurno)
 
-sql = "INSERT INTO registros_apresentacao (usuario_dss, data_hora_apresentacao, supervisao_ra, local_trabalho_ra, supervisao_original_ra) " & _
+        if err.number <> 0 then
+            code = "ERROR_DB_UPDATE"
+            message = "Erro ao tentar atualizar turno no DSS: " & err.description
+
+            response.write "{""success"":""" & lcase(success) & """, ""code"":""" & code & """, ""message"":""" & EscapeJSON(message) & """, ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & """, ""status"":""" & status & """}"
+            response.end
+        end if
+    end if
+end if
+
+horarioRegistro = now()
+
+sql = "SELECT ref_horas, ref_minutos FROM horarios_referencia " & _
+"WHERE local_trabalho_ra = '" & local & "' AND turno_funcionario = '" & turnoAtual & "'"
+set rsRef = conn.execute(sql)
+
+if rsRef.eof then
+    statusApresentacao = "OK"
+else
+    horaRef = cint(rsRef("ref_horas"))
+    minRef = cint(rsRef("ref_minutos"))
+    horaAtual = Hour(horarioRegistro)
+    minAtual = Minute(horarioRegistro)
+
+    minutosTotalRef = (horaRef * 60) + minRef
+    minutosTotalAtual = (horaAtual * 60) + minAtual
+
+    if minutosTotalAtual > minutosTotalRef then
+        statusApresentacao = "JUSTIFICAR"
+    else
+        statusApresentacao = "OK"
+    end if
+end if
+rsRef.close
+
+sqlInsert = "INSERT INTO registros_apresentacao (usuario_dss, data_hora_apresentacao, supervisao_ra, local_trabalho_ra, supervisao_original_ra) " & _
 "VALUES ('" & matricula & "', Now(), '" & supervisao & "', '" & local & "', '" & supervisaoOriginal & "')"
-conn.execute(sql)
+conn.execute(sqlInsert)
+
+horarioApresentacao = horarioRegistro
 
 if err.number <> 0 then
     success = false
+    code = "ERROR_DB_INSERT"
     message = "Erro ao registrar no banco: " & err.description
+    horarioApresentacao = ""
 else
     success = true
     message = "Apresentação registrada com sucesso!"
+    code = "SUCCESS"
+    status = statusApresentacao
 end if
 
 on error goto 0
 
 conn.close
 set conn = nothing
+set rs = nothing
+set rsCount = nothing
+set rsRef = nothing
 
-response.write "{""success"":""" & lcase(success) & """, ""message"":""" & EscapeJSON(message) & """}"
+response.write "{""success"":""" & lcase(success) & """, ""code"":""" & code & """, ""message"":""" & EscapeJSON(message) & """, ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & """, ""status"":""" & status & """}"
+response.end
 %>
