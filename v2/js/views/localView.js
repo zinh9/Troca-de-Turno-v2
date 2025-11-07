@@ -25,6 +25,41 @@ export const viewLocal = {
 
         viewLocal.iniciarRelogio();
     },
+    montarLayout: () => {
+        const headerContainer = document.getElementById('page-header');
+        const contentContainer = document.getElementById('page-content');
+
+        headerContainer.innerHTML = `
+            <div class="col-12 d-flex align-items-center">
+                <h5 class="card-title h1 text-white mt-1" id="local-title">Carregando...</h5>
+                <div class="ms-auto text-white fs-2">
+                    <div class="text-warning fw-bold" id="clock-display"></div>
+                </div>
+            </div>
+        `;
+
+        contentContainer.innerHTML = `
+            <table class="table table-hover table-striped table-dark table-sm border-rounded">
+                <thead class="table-light text-center fs-4 fw-bold">
+                    <tr>
+                        <th>Nome</th>
+                        <th>
+                            <span id="th-apresentacao">Apresentação</span>
+                        </th>
+                        <th>
+                            <span><i class="fas fa-clock"></i> Prontidão</span>
+                        </th>
+                        <th>Fim de Jornada</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaApresentacoes" class="text-center">
+                    <tr>
+                        <td colspan="4">Carregando dados...</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    },
     habilitarApresentacao: () => {
         const actionsContainer = document.getElementById('page-actions');
 
@@ -64,6 +99,42 @@ export const viewLocal = {
             formInserir.addEventListener('submit', viewLocal.postApresentacao);
         }
     },
+    carregarEMontarTabela: async () => {
+        const dados = await api.getLocalData(supervisaoAtual, localAtual);
+        console.log("Dados: ", dados);
+
+        if (dados && dados.success) {
+            const ultimaEl = document.getElementById('ultima-atualizacao');
+            if (ultimaEl) ultimaEl.innerHTML = dados.info.ultimaAtualizacao;
+            const localTitle = document.getElementById('local-title');
+            if (localTitle) localTitle.innerHTML = dados.info.nomeFormatado;
+
+            const thApresentacao = document.getElementById('th-apresentacao');
+            thApresentacao.innerHTML = `
+                <i class="fas fa-clock"
+                id="infoButton" 
+                data-bs-toggle="tooltip" 
+                data-bs-placement="bottom" 
+                data-bs-html="true" 
+                title="TEMPO REFERENCIAL: ${dados.info.horarioReferencia}"></i> Apresentação
+            `;
+            
+            viewLocal.montarLinhasTabela(dados.empregados, dados.info.horarioReferencia);
+
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            viewLocal.habilitarJustificativaApresentacao();
+
+            viewLocal.verificarEstadoLocal();
+        } else {
+            document.getElementById('tabelaApresentacoes').innerHTML = `
+                <tr><td colspan="4" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
+            `;
+        }
+    },
     verificarEstadoLocal: () => {
         const empregadoArmazenado = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
         if (empregadoArmazenado) {
@@ -71,7 +142,6 @@ export const viewLocal = {
                 const { matricula, horarioApresentacao, supervisao, local } = JSON.parse(empregadoArmazenado);
 
                 if (supervisao === supervisaoAtual && local === localAtual) {
-                    // Se o container existir, habilita prontidão (normalmente criado pela montagem da tabela)
                     if (document.getElementById('prontidao-dinamica-container')) {
                         viewLocal.habilitarProntidao(matricula, horarioApresentacao);
                     }
@@ -84,7 +154,6 @@ export const viewLocal = {
                 viewLocal.habilitarApresentacao();
             }
         } else {
-            console.log("cheguei aqui");
             viewLocal.habilitarApresentacao();
         }
     },
@@ -100,7 +169,7 @@ export const viewLocal = {
         if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
 
         containerAcoes.innerHTML = `
-            <div id="prontidao-message" class="fs-6 text-center my-2"></div>
+            <div id="prontidao-message" class="fs-5 text-center my-2"></div>
                 <form id="formProntidao">
                     <input type="hidden" name="matricula" value="${matricula}">
                     <div id="justificativas-prontidao-container" class="mb-2 input-group" style="display: none;">
@@ -134,33 +203,29 @@ export const viewLocal = {
             const botao = document.getElementById('botaoProntidao');
             const containerJustificativa = document.getElementById('justificativas-prontidao-container');
 
-            // [CORRIGIDO] Verifica todos os elementos antes de continuar
             if (!displayMessage || !botao || !containerJustificativa) {
                 clearInterval(intervaloTimerProntidao);
                 return;
             }
 
-            // FASE 1: (0 a 5 minutos) - Mostra Mensagem
             if (diffSegundos <= 300) {
-                displayMessage.style.display = 'block'; // Garante que está visível
+                displayMessage.style.display = 'block';
                 displayMessage.innerHTML = 'Faça sua <span class="text-warning"><strong>Boa Jornada</strong></span>, assine o <span class="text-warning"><strong>DSS</strong></span> e realize o <span class="text-warning"><strong>TAC</strong></span>';
                 botao.style.display = 'none';
                 containerJustificativa.style.display = 'none';
             
-            // FASE 2: (5 a 15 minutos) - Mostra Botão "Pronto"
             } else if (diffSegundos <= 900) {
                 displayMessage.style.display = 'none';
                 botao.style.display = 'block';
-                botao.className = 'btn btn-success btn-sm w-100'; // Ajustado para 'btn-sm'
+                botao.className = 'btn btn-success btn-sm w-100';
                 botao.innerHTML = 'Pronto';
                 containerJustificativa.style.display = 'none';
                 document.getElementById('justificativaProntidao').required = false;
             
-            // FASE 3: (Após 15 minutos) - Mostra Justificativa
             } else {
                 displayMessage.style.display = 'none';
                 botao.style.display = 'none';
-                containerJustificativa.style.display = 'flex'; // 'flex' ou 'block' (input-group usa flex)
+                containerJustificativa.style.display = 'flex';
                 document.getElementById('justificativaProntidao').required = true;
             }
         }, 1000);
@@ -175,76 +240,7 @@ export const viewLocal = {
 
         viewLocal.carregarEMontarTabela();
     },
-    montarLayout: () => {
-        const headerContainer = document.getElementById('page-header');
-        const contentContainer = document.getElementById('page-content');
-
-        headerContainer.innerHTML = `
-            <div class="col-12 d-flex align-items-center">
-                <h5 class="card-title h1 text-white mt-1" id="local-title">Carregando...</h5>
-                <div class="ms-auto text-white fs-2">
-                    <div class="text-warning fw-bold" id="clock-display"></div>
-                </div>
-            </div>
-        `;
-
-        contentContainer.innerHTML = `
-            <table class="table table-hover table-striped table-dark table-sm border-rounded">
-                <thead class="table-light text-center fs-4 fw-bold">
-                    <tr>
-                        <th>Nome</th>
-                        <th>
-                            <span id="th-apresentacao">Apresentação</span>
-                        </th>
-                        <th>
-                            <span><i class="fas fa-clock"></i> Prontidão</span>
-                        </th>
-                        <th>Fim de Jornada</th>
-                    </tr>
-                </thead>
-                <tbody id="tabelaApresentacoes" class="text-center">
-                    <tr>
-                        <td colspan="4">Carregando dados...</td>
-                    </tr>
-                </tbody>
-            </table>
-        `;
-    },
-    carregarEMontarTabela: async () => {
-        const dados = await api.getLocalData(supervisaoAtual, localAtual);
-        console.log("Dados: ", dados);
-
-        if (dados && dados.success) {
-            const ultimaEl = document.getElementById('ultima-atualizacao');
-            if (ultimaEl) ultimaEl.innerHTML = dados.info.ultimaAtualizacao;
-            const localTitle = document.getElementById('local-title');
-            if (localTitle) localTitle.innerHTML = dados.info.nomeFormatado;
-
-            const thApresentacao = document.getElementById('th-apresentacao');
-            thApresentacao.innerHTML = `
-                <i class="fas fa-clock"
-                id="infoButton" 
-                data-bs-toggle="tooltip" 
-                data-bs-placement="bottom" 
-                data-bs-html="true" 
-                title="TEMPO REFERENCIAL: ${dados.info.horarioReferencia}"></i> Apresentação
-            `;
-            
-            viewLocal.montarLinhasTabela(dados.empregados);
-
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
-            });
-
-            viewLocal.verificarEstadoLocal();
-        } else {
-            document.getElementById('tabelaApresentacoes').innerHTML = `
-                <tr><td colspan="4" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
-            `;
-        }
-    },
-    montarLinhasTabela: (empregados) => {
+    montarLinhasTabela: (empregados, horarioReferencia) => {
         const tbody = document.getElementById('tabelaApresentacoes');
 
         tbody.innerHTML = '';
@@ -259,18 +255,29 @@ export const viewLocal = {
         }
 
         empregados.forEach(emp => {
-            const horaApresentacao = viewLocal.horaParaMinutos(emp.apresentacao);
-            const horaReferencia = viewLocal.horaParaMinutos(`${emp.horarioRef}`);
-            
-            const apresentacaoHtml = horaApresentacao <= horaReferencia
-            ? `<span class="text-white">${emp.apresentacao}</span>`
-            : `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
+            let apresentacaoHtml = '';
+
+            const empregadoAtivo = empregadoArmazenado && String(emp.matricula) === String(empregadoArmazenado.matricula);
+            const statusApresentacao = empregadoAtivo ? (empregadoArmazenado.statusApresentacao || emp.statusApresentacao) : emp.statusApresentacao;
+
+            console.log(empregadoArmazenado);
+            if (statusApresentacao === 'OK') {
+                apresentacaoHtml =`<span class="text-white">${emp.apresentacao}</span>`;
+            } else if (statusApresentacao === 'JUSTIFICATIVA_OK') {
+                apresentacaoHtml =  `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
+            } else if (statusApresentacao === 'JUSTIFICAR') {
+                apresentacaoHtml = viewLocal.formJustificativaApresentacao(emp.matricula);
+            } else {
+                const horaApresentacao = viewLocal.horaParaMinutos(emp.apresentacao);
+                const horaReferencia = viewLocal.horaParaMinutos(horarioReferencia);
+                const apresentacaoHtml = horaApresentacao <= horaReferencia
+                ? `<span class="text-white">${emp.apresentacao}</span>`
+                : `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
+            }
 
             let prontidaoHtml = 'Aguardando...';
 
-            // CORREÇÃO: comparar como string para evitar mismatch number/string
             const igualMatricula = empregadoArmazenado && String(emp.matricula) === String(empregadoArmazenado.matricula);
-
             if (igualMatricula && !emp.prontidao) {
                 prontidaoHtml = '<div id="prontidao-dinamica-container"></div>';
             } else if (emp.statusProntidao === 'Pronto com atraso') {
@@ -293,13 +300,12 @@ export const viewLocal = {
             tbody.innerHTML += linha;
         });
 
-        // após montar a tabela, se localStorage tem usuário e existe o container, habilita prontidão
         if (empregadoArmazenado && document.getElementById('prontidao-dinamica-container')) {
             viewLocal.habilitarProntidao(empregadoArmazenado.matricula, empregadoArmazenado.horarioApresentacao);
         }
     },
     horaParaMinutos: (horaStr) => {
-        if (!horaStr) return 0;
+        if (!horaStr || typeof horaStr !== 'string') return 0;
         const [h=0, m=0] = horaStr.split(':').map(Number);
         return (h || 0) * 60 + (m || 0);
     },
@@ -310,7 +316,6 @@ export const viewLocal = {
         const botao = document.getElementById('botaoApresentar');
         const msgContainer = document.getElementById('form-message');
         const formData = new URLSearchParams(new FormData(form));
-        const matricula = formData.get('matricula');
 
         botao.disabled = true;
         botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
@@ -318,33 +323,128 @@ export const viewLocal = {
         
         const result = await api.postApresentacao(formData);
 
-        if (result.success) {
+        await viewLocal.processarPostApresentacao(result, formData);
+    },
+    processarPostApresentacao: async (result, formData) => {
+        const botao = document.getElementById("botaoApresentar");
+        const msgContainer = document.getElementById("form-message");
+
+        if (result.success === "true") {
+            const matricula = formData.get("matricula");
             const dadosEmpregado = {
                 matricula: matricula,
                 horarioApresentacao: result.horarioApresentacao,
                 supervisao: supervisaoAtual,
                 local: localAtual,
+                statusApresentacao: result.status,
             };
             localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(dadosEmpregado));
 
-            document.getElementById('matricula').value = '';
+            document.getElementById("matricula").value = '';
             msgContainer.innerHTML = `<span class="text-success">${result.message}</span>`;
 
-            // Aguardamos a atualização da tabela antes de habilitar prontidão para garantir o container existir
             await viewLocal.carregarEMontarTabela();
-
-            // Chamamos habilitarProntidao com os dados recém gravados
             viewLocal.habilitarProntidao(dadosEmpregado.matricula, dadosEmpregado.horarioApresentacao);
 
-            setTimeout(() => { msgContainer.innerHTML = ''; }, 3000);
-        } else {
-            msgContainer.innerHTML = `<span class="text-danger">${result.message}</span>`;
+            setTimeout(() => {
+                msgContainer.innerHTML = '';
+            }, 3000);
+
             botao.disabled = false;
             botao.innerHTML = '<i class="fas fa-check"></i> Apresentar';
-        }
+        } else {
+            switch (result.code) {
+                case "CONFIRM_SUPERVISAO":
+                    if (confirm(result.message)) {
+                        formData.append('confirmarSupervisao', '1');
+                        const novoResult = await api.postApresentacao(formData);
 
-        botao.disabled = false;
-        botao.innerHTML = '<i class="fas fa-check"></i> Apresentar';
+                        await viewLocal.processarPostApresentacao(novoResult, formData);
+                    } else {
+                        botao.disabled = false;
+                        botao.innerHTML = `<span class="text-success">${result.message}</span>`;
+                    }
+                    break;
+                case "CONFIRM_TURNO":
+                    if (confirm(result.message)) {
+                        formData.append('confirmarTurno', '1');
+                        const novoResult = await api.postApresentacao(formData);
+
+                        await viewLocal.processarPostApresentacao(novoResult, formData);
+                    } else {
+                        botao.disabled = false;
+                        botao.innerHTML = `<span class="text-success">${result.message}</span>`;
+                    }
+                default:
+                    msgContainer.innerHTML = `<span class="text-danger">${result.message}</span>`;
+                    botao.disabled = false;
+                    botao.innerHTML = `<span class="text-success">${result.message}</span>`;
+                    break;
+            }
+        }
+    },
+    formJustificativaApresentacao: (matricula) => {
+        return `
+        <form id="formJustificativaApresentacao">
+            <input type="hidden" name="matricula" value="${matricula}">
+            <div class="input-group input-group-sm">
+                <select name="justificativaApresentacao" id="justificativaApresentacao" class="form-select form-select-sm"> 
+                    <option value="">Justificativa…</option>
+                    <option value="Atraso chegada 1º ônibus">Atraso chegada 1º ônibus</option>
+                    <option value="Atraso chegada 2º ônibus">Atraso chegada 2º ônibus</option>
+                    <option value="DSS com Inspetoria">DSS com Inspetoria</option>
+                    <option value="DSS com Supervisor">DSS com Supervisor</option>
+                    <option value="Desatento/Distração">Desatento/Distração</option>
+                    <option value="Necessidade Pessoal">Necessidade Pessoal</option>
+                    <option value="PM - Exame Periódico">PM - Exame Periódico</option>
+                    <option value="PM - Exame de Retorno">PM - Exame de Retorno</option>
+                    <option value="Atraso do Táxi">Atraso do Táxi</option>
+                    <option value="Totem Ocupado">Totem Ocupado</option>
+                    <option value="Horário ADM">Horário ADM</option>
+                    <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
+                    <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso ao Posto de Trabalho</option>
+                    <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+                </select>
+                <button type="submit" class="btn btn-danger btn-sm">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </form>
+        `;
+    },
+    habilitarJustificativaApresentacao: () => {
+        const form = document.getElementById("formJustificativaApresentacao");
+        if (form) {
+            form.addEventListener("submit", viewLocal.postJustificativaApresentacao);
+        }
+    },
+    postJustificativaApresentacao: async (evento) => {
+        evento.preventDefault();
+        const form = evento.target;
+        const botao = form.querySelector('button[type="submit"]');
+        const dadosForm = new URLSearchParams(new FormData(form));
+
+        botao.disabled = true;
+        botao.innerHTML = '<i class="fas fa-spinner"></i>';
+
+        const result = await api.postJustificativaApresentacao(dadosForm);
+
+        if (result.success) {
+            viewLocal.settarJustificativaOK();
+        } else {
+            alert(`Erro ao enviar justificativa da apresentação: ${result.message}`);
+            botao.disabled = false;
+            botao.innerHTML = '<i class="fas fa-paper-plane"></i>';
+        }
+    },
+    settarJustificativaOK: () => {
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        if (empregadoArmazenadoJSON) {
+            const empregado = JSON.parse(empregadoArmazenadoJSON);
+            empregado.statusApresentacao = 'JUSTIFICATIVA_OK';
+            localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+        }
+        viewLocal.carregarEMontarTabela();
     },
     postProntidao: async (evento) => {
         evento.preventDefault();
@@ -364,11 +464,9 @@ export const viewLocal = {
         const result = await api.postProntidao(dadosForm);
 
         if (result.success) {
-            containerMessage.innerHTML = `<span class="text-success">${result.message}</span>`;
-
             setTimeout(() => {
-                viewLocal.limparProntidao();
-            }, 3000);
+                viewLocal.carregarEMontarTabela();
+            }, 2000);
         } else {
             containerMessage.innerHTML = `<span class="text-danger">${result.message}</span>`;
             botao.disabled = false;
