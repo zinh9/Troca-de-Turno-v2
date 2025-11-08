@@ -1,4 +1,5 @@
 import { api } from '../services/apiService.js';
+import { horaParaMinutos  } from '../utils/helpers.js';
 
 let supervisaoAtual = null;
 let localAtual = null;
@@ -157,89 +158,6 @@ export const viewLocal = {
             viewLocal.habilitarApresentacao();
         }
     },
-    habilitarProntidao: (matricula, horarioApresentacao) => {
-        const containerAcoes = document.getElementById('prontidao-dinamica-container');
-        const horaInicio = new Date(horarioApresentacao);
-
-        if (!containerAcoes) {
-            console.log('Container de prontidão não encontrado.');
-            return;
-        }
-
-        if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
-
-        containerAcoes.innerHTML = `
-            <div id="prontidao-message" class="fs-5 text-center my-2"></div>
-                <form id="formProntidao">
-                    <input type="hidden" name="matricula" value="${matricula}">
-                    <div id="justificativas-prontidao-container" class="mb-2 input-group" style="display: none;">
-                        <select name="justificativaProntidao" id="justificativaProntidao" class="form-select form-select-sm" required> 
-                            <option value="">Justificativa…</option>
-                            <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-                            <option value="DSS com Supervisor">DSS com Supervisor</option>
-                            <option value="Totem Ocupado">Totem Ocupado</option>
-                            <option value="Falta de EPI">Falta de EPI</option>
-                            <option value="Indisponibilidade DSS">Indisponibilidade DSS</option>
-                            <option value="Necessidade Pessoal">Necessidade Pessoal</option>
-                            <option value="Perda no TAC">Perda no TAC</option>
-                            <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
-                        </select>
-                        <button type="submit" class="btn btn-danger btn-sm">
-                            <i class='fas fa-paper-plane'></i>
-                        </button>
-                    </div>
-                    <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm w-100" style="display: none;">
-                        Pronto
-                    </button>
-                </form>
-            <div id="prontidao-form-message" class="mt-1 text-center small"></div>
-        `;
-
-        intervaloTimerProntidao = setInterval(() => {
-            const agora = new Date();
-            const diffSegundos = Math.floor((agora - horaInicio) / 1000);
-
-            const displayMessage = document.getElementById('prontidao-message');
-            const botao = document.getElementById('botaoProntidao');
-            const containerJustificativa = document.getElementById('justificativas-prontidao-container');
-
-            if (!displayMessage || !botao || !containerJustificativa) {
-                clearInterval(intervaloTimerProntidao);
-                return;
-            }
-
-            if (diffSegundos <= 300) {
-                displayMessage.style.display = 'block';
-                displayMessage.innerHTML = 'Faça sua <span class="text-warning"><strong>Boa Jornada</strong></span>, assine o <span class="text-warning"><strong>DSS</strong></span> e realize o <span class="text-warning"><strong>TAC</strong></span>';
-                botao.style.display = 'none';
-                containerJustificativa.style.display = 'none';
-            
-            } else if (diffSegundos <= 900) {
-                displayMessage.style.display = 'none';
-                botao.style.display = 'block';
-                botao.className = 'btn btn-success btn-sm w-100';
-                botao.innerHTML = 'Pronto';
-                containerJustificativa.style.display = 'none';
-                document.getElementById('justificativaProntidao').required = false;
-            
-            } else {
-                displayMessage.style.display = 'none';
-                botao.style.display = 'none';
-                containerJustificativa.style.display = 'flex';
-                document.getElementById('justificativaProntidao').required = true;
-            }
-        }, 1000);
-
-        const formProntidao = document.getElementById('formProntidao');
-        formProntidao.addEventListener('submit', viewLocal.postProntidao);
-    },
-    limparProntidao: () => {
-        if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
-
-        localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
-
-        viewLocal.carregarEMontarTabela();
-    },
     montarLinhasTabela: (empregados, horarioReferencia) => {
         const tbody = document.getElementById('tabelaApresentacoes');
 
@@ -254,13 +172,13 @@ export const viewLocal = {
             return;
         }
 
+        const fragment = document.createDocumentFragment();
         empregados.forEach(emp => {
             let apresentacaoHtml = '';
 
             const empregadoAtivo = empregadoArmazenado && String(emp.matricula) === String(empregadoArmazenado.matricula);
             const statusApresentacao = empregadoAtivo ? (empregadoArmazenado.statusApresentacao || emp.statusApresentacao) : emp.statusApresentacao;
 
-            console.log(empregadoArmazenado);
             if (statusApresentacao === 'OK') {
                 apresentacaoHtml =`<span class="text-white">${emp.apresentacao}</span>`;
             } else if (statusApresentacao === 'JUSTIFICATIVA_OK') {
@@ -277,8 +195,7 @@ export const viewLocal = {
 
             let prontidaoHtml = 'Aguardando...';
 
-            const igualMatricula = empregadoArmazenado && String(emp.matricula) === String(empregadoArmazenado.matricula);
-            if (igualMatricula && !emp.prontidao) {
+            if (empregadoAtivo || emp.prontidao) {
                 prontidaoHtml = '<div id="prontidao-dinamica-container"></div>';
             } else if (emp.statusProntidao === 'Pronto com atraso') {
                 prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`
@@ -286,7 +203,8 @@ export const viewLocal = {
                 prontidaoHtml = `<span class="text-success">${emp.prontidao}</span>`
             }
 
-            const linha = `
+            const linha = document.createElement('tr');
+            linha.innerHTML = `
                 <tr>
                     <td>${emp.nome}</td>
                     <td>${apresentacaoHtml}</td>
@@ -297,17 +215,9 @@ export const viewLocal = {
                 </tr>
             `;
 
-            tbody.innerHTML += linha;
+            fragment.appendChild(linha);
         });
-
-        if (empregadoArmazenado && document.getElementById('prontidao-dinamica-container')) {
-            viewLocal.habilitarProntidao(empregadoArmazenado.matricula, empregadoArmazenado.horarioApresentacao);
-        }
-    },
-    horaParaMinutos: (horaStr) => {
-        if (!horaStr || typeof horaStr !== 'string') return 0;
-        const [h=0, m=0] = horaStr.split(':').map(Number);
-        return (h || 0) * 60 + (m || 0);
+        tbody.appendChild(fragment);
     },
     postApresentacao: async (evento) => {
         evento.preventDefault();
@@ -329,6 +239,7 @@ export const viewLocal = {
         const botao = document.getElementById("botaoApresentar");
         const msgContainer = document.getElementById("form-message");
 
+
         if (result.success === "true") {
             const matricula = formData.get("matricula");
             const dadosEmpregado = {
@@ -341,7 +252,10 @@ export const viewLocal = {
             localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(dadosEmpregado));
 
             document.getElementById("matricula").value = '';
-            msgContainer.innerHTML = `<span class="text-success">${result.message}</span>`;
+            
+            msgContainer.innerHTML = result.message !== 'Apresentação registrada com sucesso!' 
+            ? '<span class="text-success">Apresentação registrada com sucesso!</span>'
+            : `<span class="text-success">${result.message}</span>`;
 
             await viewLocal.carregarEMontarTabela();
             viewLocal.habilitarProntidao(dadosEmpregado.matricula, dadosEmpregado.horarioApresentacao);
@@ -358,27 +272,28 @@ export const viewLocal = {
                     if (confirm(result.message)) {
                         formData.append('confirmarSupervisao', '1');
                         const novoResult = await api.postApresentacao(formData);
-
+                        
                         await viewLocal.processarPostApresentacao(novoResult, formData);
                     } else {
                         botao.disabled = false;
-                        botao.innerHTML = `<span class="text-success">${result.message}</span>`;
+                        botao.innerHTML = '<i class="fas fa-check"></i> Apresentar';
                     }
                     break;
                 case "CONFIRM_TURNO":
                     if (confirm(result.message)) {
                         formData.append('confirmarTurno', '1');
                         const novoResult = await api.postApresentacao(formData);
-
+                        
                         await viewLocal.processarPostApresentacao(novoResult, formData);
                     } else {
                         botao.disabled = false;
-                        botao.innerHTML = `<span class="text-success">${result.message}</span>`;
+                        botao.innerHTML = '<i class="fas fa-check"></i> Apresentar';
                     }
+                    break;
                 default:
                     msgContainer.innerHTML = `<span class="text-danger">${result.message}</span>`;
                     botao.disabled = false;
-                    botao.innerHTML = `<span class="text-success">${result.message}</span>`;
+                    botao.innerHTML = '<i class="fas fa-check"></i> Apresentar';
                     break;
             }
         }
@@ -425,7 +340,7 @@ export const viewLocal = {
         const dadosForm = new URLSearchParams(new FormData(form));
 
         botao.disabled = true;
-        botao.innerHTML = '<i class="fas fa-spinner"></i>';
+        botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         const result = await api.postJustificativaApresentacao(dadosForm);
 
@@ -471,6 +386,132 @@ export const viewLocal = {
             containerMessage.innerHTML = `<span class="text-danger">${result.message}</span>`;
             botao.disabled = false;
         }
+    },
+    habilitarProntidao: (matricula, horarioApresentacao) => {
+        const containerAcoes = document.getElementById('prontidao-dinamica-container');
+        const horaInicio = new Date(horarioApresentacao);
+
+        if (!containerAcoes) {
+            console.log('Container de prontidão não encontrado.');
+            return;
+        }
+
+        if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
+
+        containerAcoes.innerHTML = `
+            <div id="prontidao-message" class="fs-5 text-center"></div>
+                <form id="formProntidao">
+                    <input type="hidden" name="matricula" value="${matricula}">
+                    <div id="justificativas-prontidao-container" class="mb-2 input-group" style="display: none;">
+                        <select name="justificativaProntidao" id="justificativaProntidao" class="form-select form-select-sm" required> 
+                            <option value="">Justificativa…</option>
+                            <option value="DSS com Inspetoria">DSS com Inspetoria</option>
+                            <option value="DSS com Supervisor">DSS com Supervisor</option>
+                            <option value="Totem Ocupado">Totem Ocupado</option>
+                            <option value="Falta de EPI">Falta de EPI</option>
+                            <option value="Indisponibilidade DSS">Indisponibilidade DSS</option>
+                            <option value="Necessidade Pessoal">Necessidade Pessoal</option>
+                            <option value="Perda no TAC">Perda no TAC</option>
+                            <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+                        </select>
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class='fas fa-paper-plane'></i>
+                        </button>
+                    </div>
+                    <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm w-100" style="display: none;">
+                        Pronto
+                    </button>
+                </form>
+            <div id="prontidao-form-message" class="mt-1 text-center small"></div>
+        `;
+
+        const atualizarTimerProntidao = () => {
+            const agora = new Date();
+            const diffSegundos = Math.floor((agora - horaInicio) / 1000);
+
+            const displayMessage = document.getElementById('prontidao-message');
+            const botao = document.getElementById('botaoProntidao');
+            const containerJustificativa = document.getElementById('justificativas-prontidao-container');
+
+            if (!displayMessage || !botao || !containerJustificativa) {
+                clearInterval(intervaloTimerProntidao);
+                return;
+            }
+
+            if (diffSegundos <= 300) {
+                displayMessage.style.display = 'block';
+                displayMessage.innerHTML = 'Faça sua <span class="text-warning"><strong>Boa Jornada</strong></span>, assine o <span class="text-warning"><strong>DSS</strong></span> e realize o <span class="text-warning"><strong>TAC</strong></span>';
+                botao.style.display = 'none';
+                containerJustificativa.style.display = 'none';
+            
+            } else if (diffSegundos <= 900) {
+                displayMessage.style.display = 'none';
+                botao.style.display = 'block';
+                botao.className = 'btn btn-success btn-sm w-100';
+                botao.innerHTML = 'Pronto';
+                containerJustificativa.style.display = 'none';
+                document.getElementById('justificativaProntidao').required = false;
+            
+            } else {
+                displayMessage.style.display = 'none';
+                botao.style.display = 'none';
+                containerJustificativa.style.display = 'flex';
+                document.getElementById('justificativaProntidao').required = true;
+            }
+        };
+
+        atualizarTimerProntidao();
+        intervaloTimerProntidao = setInterval(atualizarTimerProntidao, 1000);
+        const formProntidao = document.getElementById('formProntidao');
+        formProntidao.addEventListener('submit', viewLocal.postProntidao);
+    },
+    limparProntidao: () => {
+        if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
+
+        localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
+
+        viewLocal.carregarEMontarTabela();
+    },
+    habilitarFimJornada: (matricula) => {
+        const conatinerFimJornada = document.getElementById('fimJornada-dinamica-container');
+
+        if (!conatinerFimJornada) {
+            console.log('Conatiner de fim de jornada não encontrada!');
+            return;
+        }
+
+        conatinerFimJornada.innerHTML = `
+            <form id="formProntidao">
+                <input type="hidden" name="matricula" value="${matricula}">
+                <div id="justificativas-fimJornada-container" class="mb-2 input-group" style="display: none;">
+                    <select name="justificativaFimJornada" id="justificativaFimJornada" class="form-select form-select-sm" required> 
+                        <option value="">Justificativa…</option>
+                        <option value="Permanência pós jornada atribuída ao CCP">Permanência pós jornada atribuída ao CCP</option>
+                        <option value="Solicitação de permanência pela Supervisão de Pátio">Solicitação de permanência pela Supervisão de Pátio</option>
+                        <option value="Alinhamento de DBO">Alinhamento de DBO</option>
+                        <option value="Indisponibilidade do Totem">Indisponibilidade do totem</option>
+                        <option value="Atendimento à Incidentes Operacionais">Atendimento à incidentes Operacionais</option>
+                        <option value="DSS com Inspetoria">DSS com Inspetoria</option>
+                        <option value="DSS com Supervisor">DSS com Supervisor</option>
+                        <option value="Distração/Desatenção no apontamento da saída">Distração/Desatenção no apontamento da saída</option>
+                        <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
+                        <option value="Eventos de ACT">Eventos de ACT</option>
+                        <option value="Atraso de Transporte">Atraso de Transporte</option>
+                        <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+                        <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso ao Posto de Trabalho</option>
+                        <option value="Horário ADM">Horário ADM</option>
+                    </select>
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <button type="submit" id="botaoFimJornada" class="btn btn-success btn-sm w-100" style="display: none;">
+                    Pronto
+                </button>
+            </form>
+        `;
+
+
     },
     iniciarRelogio: () => {
         setInterval(() => {
