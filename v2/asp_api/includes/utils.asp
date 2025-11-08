@@ -1,6 +1,17 @@
 <!--#include file='conexao.asp' -->
 <%
 
+sub ResponseWriteJSON(success, code, message, horarioApresentacao, status)
+    response.write "{"
+    response.write " ""success"":""" & lcase(success) & ""","
+    response.write " ""code"":""" & EscapeJSON(code) & ""","
+    response.write " ""message"":""" & EscapeJSON(message) & ""","
+    response.write " ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & ""","
+    response.write " ""status"":""" & EscapeJSON(status) & """"
+    response.write "}"
+    response.end
+end sub
+
 function buildJSONInfo(nome, att, ref)
     dim str
     str = "{"
