@@ -40,6 +40,7 @@ function buildJSONTabela(rs)
             str = str & " ""prontidao"":""" & verifyDateTimeNullCorrect(rs("prontidao")) & ""","
             str = str & " ""statusProntidao"":""" & rs("status") & ""","
             str = str & " ""justificativaProntidao"":""" & rs("justificativa_prontidao") & ""","
+            str = str & " ""statusFimJornada"":""" & verificarStatusFimJornada(rs("turno"), rs("apresentacao"), rs("fim_jornada")) & ""","
             str = str & " ""fimJornada"":""" & verifyDateTimeNullCorrect(rs("fim_jornada")) & """"
             str = str & "}"
 
@@ -52,8 +53,35 @@ function buildJSONTabela(rs)
     buildJSONTabela = str
 end function
 
-function verificarStatusFimJornada()
+function verificarStatusFimJornada(turno, dataHoraApresentacao, fimJornada)
+    dim horarioFimTurno, status
+    status = false
 
+    if isnull(fimJornada) or fimJornada = "" then
+        select case turno
+            case "06x18"
+                horarioFimTurno = Date() & " " & timeserial(18, 0, 0)
+            case "18x06"
+                horarioFimTurno = (DateValue(dataHoraApresentacao) + 1) & " " & timeserial(6, 0, 0)
+            case "05x17"
+                horarioFimTurno = Date() & " " & timeserial(17, 0, 0)
+            case "17x05"
+                horarioFimTurno = (DateValue(dataHoraApresentacao) + 1) & " " & timeserial(5, 0, 0)
+            case "12x00"
+                horarioFimTurno = ((DateValue(dataHoraApresentacao) + 1) & " " & timeserial(0, 0, 0))
+            case "ADM"
+                horarioFimTurno = Date() & " " & timeserial(16, 30, 0)
+            case Else
+                horarioFimTurno = DateAdd("n", 720, dataHoraApresentacao)
+        end select
+
+        diffFimJornada = DateDiff("n", horarioFimTurno, now())
+        if diffFimJornada > 0 then
+            status = true
+        end if
+    end if
+
+    verificarStatusFimJornada = status
 end function
 
 function FormatISOData(dt)
