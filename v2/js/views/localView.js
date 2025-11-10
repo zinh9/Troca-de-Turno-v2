@@ -4,7 +4,7 @@ import { horaParaMinutos  } from '../utils/helpers.js';
 let supervisaoAtual = null;
 let localAtual = null;
 let intervaloTimerProntidao = null;
-let intervaloPollingTabela = null; // mantemos referência para poder limpar se necessário
+let intervaloPollingTabela = null;
 const CHAVE_ARMAZENAMENTO_LOCAL = 'empregadoAtivoLocal';
 
 export const viewLocal = {
@@ -20,7 +20,6 @@ export const viewLocal = {
 
         viewLocal.verificarEstadoLocal();
 
-        // CORREÇÃO: não chamar a função imediatamente. passar referência/função.
         if (intervaloPollingTabela) clearInterval(intervaloPollingTabela);
         intervaloPollingTabela = setInterval(() => viewLocal.carregarEMontarTabela(), 40000);
 
@@ -119,6 +118,25 @@ export const viewLocal = {
                 data-bs-html="true" 
                 title="TEMPO REFERENCIAL: ${dados.info.horarioReferencia}"></i> Apresentação
             `;
+
+            const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+            if (empregadoArmazenadoJSON) {
+                const empregadoLocal = JSON.parse(empregadoArmazenadoJSON);
+
+                const empNoBanco = dados.empregados.find(e => String(e.matricula) === String(empregadoLocal.matricula));
+
+                if (empNoBanco) {
+                    let mudou = false;
+                    if (empNoBanco.statusFimJornada && !empregadoLocal.statusFimJornada) {
+                        empregadoLocal.statusFimJornada = empNoBanco.statusFimJornada;
+                        mudou = true;
+                    }
+
+                    if (mudou) {
+                        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregadoLocal));
+                    }
+                }
+            }
             
             viewLocal.montarLinhasTabela(dados.empregados, dados.info.horarioReferencia);
 
@@ -130,6 +148,8 @@ export const viewLocal = {
             viewLocal.habilitarJustificativaApresentacao();
 
             viewLocal.verificarEstadoLocal();
+
+            viewLocal.habilitarFimJornada();
         } else {
             document.getElementById('tabelaApresentacoes').innerHTML = `
                 <tr><td colspan="4" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
@@ -145,6 +165,15 @@ export const viewLocal = {
                 if (supervisao === supervisaoAtual && local === localAtual) {
                     if (document.getElementById('prontidao-dinamica-container')) {
                         viewLocal.habilitarProntidao(matricula, horarioApresentacao);
+                    }
+                } else {
+                    localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
+                    viewLocal.habilitarApresentacao();
+                }
+
+                if (supervisao === supervisaoAtual && local === localAtual) {
+                    if (document.getElementById('fimJornada-dinamica-container')) {
+                        viewLocal.habilitarFimJornada(matricula);
                     }
                 } else {
                     localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
@@ -174,11 +203,10 @@ export const viewLocal = {
 
         const fragment = document.createDocumentFragment();
         empregados.forEach(emp => {
-            let apresentacaoHtml = '';
-
             const empregadoAtivo = empregadoArmazenado && String(emp.matricula) === String(empregadoArmazenado.matricula);
             const statusApresentacao = empregadoAtivo ? (empregadoArmazenado.statusApresentacao || emp.statusApresentacao) : emp.statusApresentacao;
 
+            let apresentacaoHtml = '';
             if (statusApresentacao === 'OK') {
                 apresentacaoHtml =`<span class="text-white">${emp.apresentacao}</span>`;
             } else if (statusApresentacao === 'JUSTIFICATIVA_OK') {
@@ -186,16 +214,15 @@ export const viewLocal = {
             } else if (statusApresentacao === 'JUSTIFICAR') {
                 apresentacaoHtml = viewLocal.formJustificativaApresentacao(emp.matricula);
             } else {
-                const horaApresentacao = viewLocal.horaParaMinutos(emp.apresentacao);
-                const horaReferencia = viewLocal.horaParaMinutos(horarioReferencia);
-                const apresentacaoHtml = horaApresentacao <= horaReferencia
+                const horaApresentacao = horaParaMinutos(emp.apresentacao);
+                const horaReferencia = horaParaMinutos(horarioReferencia);
+                apresentacaoHtml = horaApresentacao <= horaReferencia
                 ? `<span class="text-white">${emp.apresentacao}</span>`
                 : `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
             }
 
             let prontidaoHtml = 'Aguardando...';
-
-            if (empregadoAtivo || emp.prontidao) {
+            if (empregadoAtivo && emp.prontidao === '') {
                 prontidaoHtml = '<div id="prontidao-dinamica-container"></div>';
             } else if (emp.statusProntidao === 'Pronto com atraso') {
                 prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`
@@ -203,18 +230,21 @@ export const viewLocal = {
                 prontidaoHtml = `<span class="text-success">${emp.prontidao}</span>`
             }
 
+            let fimJornadaHtml = '--:--';
+            console.log(typeof emp.fimJornada);
+            if (emp.fimJornada) {
+                fimJornadaHtml = '<span class="text-success"><i class="fa-solid fa-check"></i></span>';
+            } else if (empregadoAtivo || emp.fimJornada === '') {
+                fimJornadaHtml = `<div id="fimJornada-dinamica-container"></div>`;
+            }
+
             const linha = document.createElement('tr');
             linha.innerHTML = `
-                <tr>
-                    <td>${emp.nome}</td>
-                    <td>${apresentacaoHtml}</td>
-                    <td>${prontidaoHtml}</td>
-                    <td>
-                        ${emp.fimJornada ? emp.fimJornada : "--:--"}
-                    </td>
-                </tr>
+                <td>${emp.nome}</td>
+                <td>${apresentacaoHtml}</td>
+                <td>${prontidaoHtml}</td>
+                <td>${fimJornadaHtml}</td>
             `;
-
             fragment.appendChild(linha);
         });
         tbody.appendChild(fragment);
@@ -361,32 +391,6 @@ export const viewLocal = {
         }
         viewLocal.carregarEMontarTabela();
     },
-    postProntidao: async (evento) => {
-        evento.preventDefault();
-
-        const form = evento.target;
-        const botao = document.getElementById('botaoProntidao');
-        const containerMessage = document.getElementById('prontidao-form-message');
-        const dadosForm = new URLSearchParams(new FormData(form));
-
-        dadosForm.append('supervisao', supervisaoAtual);
-        dadosForm.append('local', localAtual);
-
-        botao.disabled = true;
-        botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
-        containerMessage.innerHTML = '';
-
-        const result = await api.postProntidao(dadosForm);
-
-        if (result.success) {
-            setTimeout(() => {
-                viewLocal.carregarEMontarTabela();
-            }, 2000);
-        } else {
-            containerMessage.innerHTML = `<span class="text-danger">${result.message}</span>`;
-            botao.disabled = false;
-        }
-    },
     habilitarProntidao: (matricula, horarioApresentacao) => {
         const containerAcoes = document.getElementById('prontidao-dinamica-container');
         const horaInicio = new Date(horarioApresentacao);
@@ -396,7 +400,7 @@ export const viewLocal = {
             return;
         }
 
-        if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
+        //if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
 
         containerAcoes.innerHTML = `
             <div id="prontidao-message" class="fs-5 text-center"></div>
@@ -438,13 +442,13 @@ export const viewLocal = {
                 return;
             }
 
-            if (diffSegundos <= 300) {
+            if (diffSegundos <= 100) { // 300
                 displayMessage.style.display = 'block';
                 displayMessage.innerHTML = 'Faça sua <span class="text-warning"><strong>Boa Jornada</strong></span>, assine o <span class="text-warning"><strong>DSS</strong></span> e realize o <span class="text-warning"><strong>TAC</strong></span>';
                 botao.style.display = 'none';
                 containerJustificativa.style.display = 'none';
             
-            } else if (diffSegundos <= 900) {
+            } else if (diffSegundos <= 300) { // 900
                 displayMessage.style.display = 'none';
                 botao.style.display = 'block';
                 botao.className = 'btn btn-success btn-sm w-100';
@@ -465,6 +469,53 @@ export const viewLocal = {
         const formProntidao = document.getElementById('formProntidao');
         formProntidao.addEventListener('submit', viewLocal.postProntidao);
     },
+    postProntidao: async (evento) => {
+        evento.preventDefault();
+
+        const form = evento.target;
+        const botaoPronto = document.getElementById('botaoProntidao');
+        const botaoJustificativa = document.querySelector('.btn-danger');
+        const containerMessage = document.getElementById('prontidao-form-message');
+        const dadosForm = new URLSearchParams(new FormData(form));
+
+        dadosForm.append('supervisao', supervisaoAtual);
+        dadosForm.append('local', localAtual);
+
+        if (botaoPronto) botaoPronto.disabled = true;
+        if (botaoJustificativa) botaoJustificativa.disabled = true;
+        const select = form.querySelector('#justificativaProntidao');
+        if (select) select.disabled = true;
+
+        if (evento.submitter && evento.submitter.id === 'botaoProntidao') {
+            botaoPronto.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+        } else if (botaoJustificativa) {
+            botaoJustificativa.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        }
+        if (containerMessage) containerMessage.innerHTML = '';
+ 
+        const result = await api.postProntidao(dadosForm);
+ 
+        if (result.success === 'true') {
+            setTimeout(() => {
+                viewLocal.settarProntidaoOK();
+            }, 1000);
+        } else {
+            if (containerMessage) containerMessage.innerHTML = `<span class="text-danger">${result.message}</span>`;
+            if (botaoPronto) botaoPronto.disabled = false;
+            if (botaoJustificativa) botaoJustificativa.disabled = false;
+            if (select) select.disabled = false;
+        }
+    },
+    settarProntidaoOK: () => {
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        if (empregadoArmazenadoJSON) {
+            const empregado = JSON.parse(empregadoArmazenadoJSON);
+            empregado.statusProntidao = 'Pronto';
+            localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+        } else {
+            viewLocal.carregarEMontarTabela();
+        }
+    },
     limparProntidao: () => {
         if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
 
@@ -474,17 +525,20 @@ export const viewLocal = {
     },
     habilitarFimJornada: (matricula) => {
         const conatinerFimJornada = document.getElementById('fimJornada-dinamica-container');
-
         if (!conatinerFimJornada) {
-            console.log('Conatiner de fim de jornada não encontrada!');
+            // console.log('Container de fim de jornada não encontrado!');
             return;
         }
-
+    
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        const empregadoArmazenado = JSON.parse(empregadoArmazenadoJSON);
+        const statusFimJornada = empregadoArmazenado.statusFimJornada === 'true';
+    
         conatinerFimJornada.innerHTML = `
-            <form id="formProntidao">
+            <form id="formFimJornada">
                 <input type="hidden" name="matricula" value="${matricula}">
-                <div id="justificativas-fimJornada-container" class="mb-2 input-group" style="display: none;">
-                    <select name="justificativaFimJornada" id="justificativaFimJornada" class="form-select form-select-sm" required> 
+                <div id="justificativas-fimJornada-container" class="mb-2 input-group" style="display: ${statusFimJornada ? 'flex' : 'none'};">
+                    <select name="justificativaFimJornada" id="justificativaFimJornada" class="form-select form-select-sm"> 
                         <option value="">Justificativa…</option>
                         <option value="Permanência pós jornada atribuída ao CCP">Permanência pós jornada atribuída ao CCP</option>
                         <option value="Solicitação de permanência pela Supervisão de Pátio">Solicitação de permanência pela Supervisão de Pátio</option>
@@ -505,13 +559,58 @@ export const viewLocal = {
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
-                <button type="submit" id="botaoFimJornada" class="btn btn-success btn-sm w-100" style="display: none;">
-                    Pronto
+                <button type="submit" id="botaoFimJornada" class="btn btn-light btn-sm w-100" style="display: ${statusFimJornada ? 'none' : 'block'};">
+                    Bom Descanso
                 </button>
             </form>
         `;
+    
+        const formFimJornada = document.getElementById('formFimJornada');
+        const botaoFimJornada = document.getElementById('botaoFimJornada');
+    
+        formFimJornada.addEventListener('submit', (evento) => {
+            if (statusFimJornada) {
+                evento.preventDefault();
+                const confirmar = confirm("Deseja realmente encerrar a jornada?");
+                if (confirmar) {
+                    viewLocal.postFimJornada(evento);
+                }
+            } else {
+                viewLocal.postFimJornada(evento);
+            }
+        });
+    },
+    postFimJornada: async (evento) => {
+        evento.preventDefault(); // Evita o envio padrão do formulário
 
+        const form = evento.target;
+        const botaoFimJornada = document.getElementById('botaoFimJornada');
+        const botaoJustificativa = document.querySelector('.btn-danger');
+        const dadosForm = new URLSearchParams(new FormData(form));    
+        
+        if (botaoFimJornada) botaoFimJornada.disabled = true;
+        if (botaoJustificativa) botaoJustificativa.disabled = true;
+        const select = form.querySelector('#justificativaFimJornada');
+        if (select) select.disabled = true;
 
+        if (evento.submitter && evento.submitter.id === 'botaoFimJornada') {
+            botaoFimJornada.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+        } else if (botaoJustificativa) {
+            botaoJustificativa.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        }
+ 
+        const result = await api.postFimJornada(dadosForm);
+
+        if (result.success === 'true') {
+            setTimeout(() => {
+                viewLocal.carregarEMontarTabela();
+            }, 1000);
+        } else {
+            console.log(result.message);
+            if (botaoFimJornada) botaoFimJornada.disabled = false;
+            if (botaoJustificativa) botaoJustificativa.disabled = false;
+            if (select) select.disabled = false;
+        }
     },
     iniciarRelogio: () => {
         setInterval(() => {
