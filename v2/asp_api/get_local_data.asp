@@ -62,7 +62,7 @@ sqlTabela = _
 "ra.data_hora_lanche_CPT AS lanche_CPT, " & _
 "ra.data_hora_refeicao_patio AS refeicao, " & _
 "ra.data_hora_refeicao_CPT AS refeicao_CPT, " & _
-"ra.justificativa_atraso_fim_jornada, " & _
+"ra.justificativa_atraso_fim_jornada AS justificativa_fim_jornada, " & _
 "ra.fim_jornada, " & _
 "hr.ref_horas, " & _
 "hr.ref_minutos, " & _
@@ -71,7 +71,8 @@ sqlTabela = _
 "INNER JOIN login_dss ld ON ra.usuario_dss = ld.usuario_dss) " & _
 "INNER JOIN horarios_referencia hr ON ra.local_trabalho_ra = hr.local_trabalho_ra AND ld.horario_login_dss = hr.turno_funcionario " & _
 "WHERE ((DateValue(ra.data_hora_apresentacao) = Date() AND TimeValue(ra.data_hora_apresentacao) <= #23:59:59#) " & _
-"OR (DateValue(ra.data_hora_apresentacao) = Date() - 1 AND TimeValue(ra.data_hora_apresentacao) >= #00:00:00#)) "
+"OR (DateValue(ra.data_hora_apresentacao) = Date() - 1 AND TimeValue(ra.data_hora_apresentacao) >= #00:00:00#)) " & _
+"AND Now() <= DateAdd('n', 870, ra.data_hora_apresentacao) "
 
 ' Condição que verifica se o filtro de torre foi passado no parametro e concatena com o SQL com um AND
 If qsSup <> "" Then
