@@ -19,7 +19,7 @@ justificativa = request.form("justificativaFimJornada")
 ' matricula = "81053394"
 ' justificativa = null
 
-success = false
+success = "false"
 message = ""
 horarioFimJornada = now()
 
@@ -45,10 +45,10 @@ set conn = getConexao()
 conn.execute(sql)
 
 if err.number <> 0 then
-    success = false
+    success = "false"
     message = "Erro ao registrar Fim de Jornada!"
 else
-    success = true
+    success = "true"
     message = "Fim de Jornada registrada com sucesso!"
 end if
 
@@ -57,7 +57,7 @@ on error goto 0
 conn.close
 set conn = nothing
 
-response.write "{""success"":""" & lcase(success) & """,""message"":""" & message & """}"
+response.write "{""success"":" & lcase(success) & ",""message"":""" & message & """}"
 response.end
 
 %>
