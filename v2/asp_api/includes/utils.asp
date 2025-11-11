@@ -3,7 +3,7 @@
 
 sub ResponseWriteJSON(success, code, message, horarioApresentacao, status)
     response.write "{"
-    response.write " ""success"":""" & lcase(success) & ""","
+    response.write " ""success"":" & lcase(success) & ","
     response.write " ""code"":""" & EscapeJSON(code) & ""","
     response.write " ""message"":""" & EscapeJSON(message) & ""","
     response.write " ""horarioApresentacao"":""" & FormatISOData(horarioApresentacao) & ""","
@@ -32,16 +32,17 @@ function buildJSONTabela(rs)
             if count > 0 then str = str & ","
             
             str = str & "{"
-            str = str & " ""matricula"":""" & rs("matricula") & ""","
-            str = str & " ""nome"":""" & ucase(rs("nome")) & ""","
+            str = str & " ""matricula"":""" & EscapeJSON(rs("matricula")) & ""","
+            str = str & " ""nome"":""" & ucase(EscapeJSON(rs("nome"))) & ""","
             str = str & " ""apresentacao"":""" & verifyDateTimeNullCorrect(rs("apresentacao")) & ""","
-            str = str & " ""justificativaApresentacao"":""" & rs("justificativa_apresentacao") & ""","
+            str = str & " ""justificativaApresentacao"":""" & EscapeJSON(rs("justificativa_apresentacao")) & ""","
             str = str & " ""horarioRef"":""" & rs("ref_horas") & ":" & rs("ref_minutos") & ""","
             str = str & " ""prontidao"":""" & verifyDateTimeNullCorrect(rs("prontidao")) & ""","
             str = str & " ""statusProntidao"":""" & rs("status") & ""","
-            str = str & " ""justificativaProntidao"":""" & rs("justificativa_prontidao") & ""","
-            str = str & " ""statusFimJornada"":""" & verificarStatusFimJornada(rs("turno"), rs("apresentacao"), rs("fim_jornada")) & ""","
-            str = str & " ""fimJornada"":""" & verifyDateTimeNullCorrect(rs("fim_jornada")) & """"
+            str = str & " ""justificativaProntidao"":""" & EscapeJSON(rs("justificativa_prontidao")) & ""","
+            str = str & " ""statusFimJornada"":" & verificarStatusFimJornada(rs("turno"), rs("apresentacao"), rs("fim_jornada")) & ","
+            str = str & " ""fimJornada"":""" & verifyDateTimeNullCorrect(rs("fim_jornada")) & ""","
+            str = str & " ""justificativaFimJornada"":""" & EscapeJSON(rs("justificativa_fim_jornada")) & """"
             str = str & "}"
 
             count = count + 1
@@ -55,7 +56,7 @@ end function
 
 function verificarStatusFimJornada(turno, dataHoraApresentacao, fimJornada)
     dim horarioFimTurno, status
-    status = false
+    status = "false"
 
     if isnull(fimJornada) or fimJornada = "" then
         select case turno
@@ -77,7 +78,7 @@ function verificarStatusFimJornada(turno, dataHoraApresentacao, fimJornada)
 
         diffFimJornada = DateDiff("n", horarioFimTurno, now())
         if diffFimJornada > 0 then
-            status = true
+            status = "true"
         end if
     end if
 
