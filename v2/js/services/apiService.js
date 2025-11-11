@@ -31,8 +31,6 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_apresentacao.asp`;
 
-            
-    
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -66,6 +64,9 @@ export const api = {
 
             const response = await fetch(url, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
                 body: formData,
             });
 
