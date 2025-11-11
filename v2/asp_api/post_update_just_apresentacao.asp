@@ -16,7 +16,7 @@ dim conn, sql, rs, success, message
 matricula = request.form("matricula")
 justificativa = request.form("justificativaApresentacao")
 
-success = false
+success = "false"
 message = ""
 
 if justificativa = "" or isnull(justificativa) then
@@ -34,10 +34,10 @@ sql = "UPDATE registros_apresentacao SET " & _
 conn.execute(sql)
 
 if err.number <> 0 then
-    success = false
+    success = "false"
     message = "Erro ao registrar justificativa!"
 else
-    success = true
+    success = "true"
     message = "Justificativa registrada com sucesso!"
 end if
 
@@ -46,6 +46,6 @@ on error goto 0
 conn.close
 set conn = nothing
 
-response.write "{""success"":""" & lcase(success) & """,""message"":""" & message & """}"
+response.write "{""success"":" & lcase(success) & ",""message"":""" & message & """}"
 response.end
 %>
