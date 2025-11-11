@@ -8,6 +8,29 @@ let intervaloTimerProntidao = null;
 let intervaloPollingTabela = null;
 const CHAVE_ARMAZENAMENTO_LOCAL = 'empregadoAtivoLocal';
 
+// --- PONTO DE ENTRADA ---
+
+export const viewLocal = {
+    init: init
+};
+
+async function init(supervisao, local) {
+    supervisaoAtual = supervisao;
+    localAtual = local;
+
+    montarLayout();
+    habilitarApresentacao();
+
+    listenersDinamicos();
+
+    await carregarEMontarTabela();
+
+    if (intervaloPollingTabela) clearInterval(intervaloPollingTabela);
+    intervaloPollingTabela = setInterval(() => carregarEMontarTabela(), 40000);
+
+    iniciarRelogio();
+}
+
 function montarLayout() {
     const headerContainer = document.getElementById('page-header');
     const contentContainer = document.getElementById('page-content');
@@ -25,14 +48,16 @@ function montarLayout() {
         <table class="table table-hover table-striped table-dark table-sm border-rounded">
             <thead class="table-light text-center fs-4 fw-bold">
                 <tr>
-                    <th>Nome</th>
+                    <th><span><i class="fa fa-user" aria-hidden="true"></i> Nome</span></th>
                     <th><span id="th-apresentacao">Apresentação</span></th>
                     <th><span><i class="fas fa-clock"></i> Prontidão</span></th>
+                    <th><span><i class="fas fa-burger"></i> Lanche</span></th>
+                    <th><span><i class="fas fa-utensils"></i> Refeição</span></th>
                     <th>Fim de Jornada</th>
                 </tr>
             </thead>
             <tbody id="tabelaApresentacoes" class="text-center">
-                <tr><td colspan="4">Carregando dados...</td></tr>
+                <tr><td colspan="6">Carregando dados...</td></tr>
             </tbody>
         </table>
     `;
@@ -60,9 +85,11 @@ function habilitarApresentacao() {
                 </form>
             </div>
             <div class="col-md-auto">
-                <button type="button" class="btn btn-secondary" onclick="window.open('https://efvmworkplace/dss/login_form.asp', '_blank')">
-                    <i class="fas fa-shield"></i> Assinar DSS
-                </button>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-secondary" onclick="window.open('https://efvmworkplace/dss/login_form.asp', '_blank')">
+                        <i class="fas fa-shield"></i> Assinar DSS
+                    </button>
+                </div>
             </div>
             <div class="col-md-auto ms-auto">
                 <button type="button" class="btn btn-secondary">
@@ -108,7 +135,7 @@ async function carregarEMontarTabela() {
         verificarEstadoLocal();
     } else {
         document.getElementById('tabelaApresentacoes').innerHTML = `
-            <tr><td colspan="4" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
+            <tr><td colspan="6" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
         `;
     }
 }
@@ -123,7 +150,7 @@ function montarLinhasTabela(empregados, horarioReferencia) {
     const empregadoArmazenado = empregadoArmazenadoJSON ? JSON.parse(empregadoArmazenadoJSON) : null;
 
     if (!empregados || empregados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-danger">Nenhuma apresentação registrada</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Nenhuma apresentação registrada</td></tr>';
         return;
     }
 
@@ -160,12 +187,12 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         }
 
         let fimJornadaHtml = '--:--';
-        if (emp.fimJornada) {
+        if (emp.fimJornada && !emp.justificativaFimJornada) {
             fimJornadaHtml = '<span class="text-success"><i class="fa-solid fa-check"></i></span>';
+        } else if (emp.fimJornada && emp.justificativaFimJornada) {
+            fimJornadaHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaFimJornada}">${emp.fimJornada}</span>`;
         } else if (emp.statusFimJornada !== null) {
             fimJornadaHtml = renderizarFormFimJornada(emp.matricula, emp.statusFimJornada);
-        } else if (emp.fimJornada && emp.statusFimJornada === true) {
-            fimJornadaHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaFimJornada}">${emp.fimJornada}</span>`;
         }
 
         const linha = document.createElement('tr');
@@ -174,6 +201,8 @@ function montarLinhasTabela(empregados, horarioReferencia) {
             <td>${emp.nome}</td>
             <td>${apresentacaoHtml}</td>
             <td>${prontidaoHtml}</td>
+            <td></td>
+            <td></td>
             <td class="text-center">${fimJornadaHtml}</td>
         `;
         fragmento.appendChild(linha);
@@ -191,7 +220,18 @@ function renderizarFormJustificativaApresentacao(matricula) {
                 <option value="Atraso chegada 1º ônibus">Atraso chegada 1º ônibus</option>
                 <option value="Atraso chegada 2º ônibus">Atraso chegada 2º ônibus</option>
                 <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-                </select>
+                <option value="DSS com Supervisor">DSS com Supervisor</option>
+                <option value="Desatento/Distração">Desatento/Distração</option>
+                <option value="Necessidade Pessoal">Necessidade Pessoal</option>
+                <option value="PM - Exame Periódico">PM - Exame Periódico</option>
+                <option value="PM - Exame de Retorno">PM - Exame de Retorno</option>
+                <option value="Atraso do Táxi">Atraso do Táxi</option>
+                <option value="Totem Ocupado">Totem Ocupado</option>
+                <option value="Horário ADM">Horário ADM</option>
+                <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
+                <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso ao Posto de Trabalho</option>" & _
+                <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+            </select>
             <button type="submit" class="btn btn-danger btn-sm">
                 <i class="fas fa-paper-plane"></i>
             </button>
@@ -205,6 +245,7 @@ function renderizarFormFimJornada(matricula, estaAtrasado) {
     const displayBotaoNormal = estaAtrasado ? 'none' : 'block';
 
     return `
+    <center>
         <form id="formFimJornada">
             <input type="hidden" name="matricula" value="${matricula}">
             <div class="justificativas-fimJornada-container mb-2 input-group" style="display: ${displayJustificativa};">
@@ -233,6 +274,7 @@ function renderizarFormFimJornada(matricula, estaAtrasado) {
                 Bom Descanso
             </button>
         </form>
+    </center>
     `;
 }
 
@@ -287,7 +329,7 @@ function habilitarProntidao(matricula, horarioApresentacao) {
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
-            <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm w-100" style="display: none;">
+            <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm" style="display: none;">
                 Pronto
             </button>
         </form>
@@ -344,14 +386,14 @@ function limparProntidao() {
 /**
  * Vincula todos os listeners dos formulários dinâmicos da tabela.
  */
-function vincularListenersDinamicos() {
+function listenersDinamicos() {
     const tbody = document.getElementById('tabelaApresentacoes');
 
     tbody.addEventListener('submit', (evento) => {
         const form = evento.target;
 
         if (form.id === 'formJustificativaApresentacao') {
-            aoEnviarApresentacao(evento);
+            aoEnviarJustificativaApresentacao(evento);
         }
 
         if (form.id === 'formProntidao') {
@@ -362,23 +404,6 @@ function vincularListenersDinamicos() {
             aoEnviarFimJornada(evento);
         }
     });
-    // // Vincula o form de Justificativa de Apresentação (se existir)
-    // const formJustApr = document.getElementById("formJustificativaApresentacao");
-    // if (formJustApr) {
-    //     formJustApr.addEventListener("submit", aoEnviarJustificativaApresentacao);
-    // }
-
-    // // Vincula o form de Prontidão (se existir)
-    // const formPront = document.getElementById('formProntidao');
-    // if (formPront) {
-    //     formPront.addEventListener('submit', aoEnviarProntidao);
-    // }
-
-    // // Vincula TODOS os formulários de Fim de Jornada (um por linha)
-    // const formsFimJornada = document.querySelectorAll(".formFimJornada");
-    // formsFimJornada.forEach(form => {
-    //     form.addEventListener('submit', aoEnviarFimJornada);
-    // });
 }
 
 /**
@@ -406,7 +431,6 @@ async function processarRespostaApresentacao(result, formData) {
     const botao = document.getElementById("botaoApresentar");
     const msgContainer = document.getElementById("form-message");
 
-    // [CORREÇÃO] Verificação explícita (ASP envia "false" como string)
     if (result.success === true) { 
         const matricula = formData.get("matricula");
         const dadosEmpregado = {
@@ -416,25 +440,22 @@ async function processarRespostaApresentacao(result, formData) {
             local: localAtual,
             statusApresentacao: result.status, // (Salva "OK" ou "JUSTIFICAR")
         };
-        // Salva o objeto inteiro
         localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(dadosEmpregado));
 
         document.getElementById("matricula").value = '';
         msgContainer.innerHTML = `<span class="text-success">${result.message || 'Apresentação registrada!'}</span>`;
 
-        await carregarEMontarTabela(); // Redesenha a tabela
-        // 'habilitarProntidao'/'habilitarJustificativa' serão chamados por carregarEMontarTabela
+        await carregarEMontarTabela();
 
         setTimeout(() => { msgContainer.innerHTML = ''; }, 3000);
 
         botao.disabled = false;
         botao.innerHTML = '<i class="fas fa-check"></i> Apresentar';
     } else {
-        // Falha (Confirmação ou Erro)
         switch (result.code) {
             case "CONFIRM_SUPERVISAO":
                 if (confirm(result.message)) {
-                    formData.append('confirmarSupervisao', '1'); // Nome bate com o ASP
+                    formData.append('confirmarSupervisao', '1');
                     const novoResult = await api.postApresentacao(formData);
                     await processarRespostaApresentacao(novoResult, formData);
                 } else {
@@ -444,7 +465,7 @@ async function processarRespostaApresentacao(result, formData) {
                 break;
             case "CONFIRM_TURNO":
                 if (confirm(result.message)) {
-                    formData.append('confirmarTurno', '1'); // Nome bate com o ASP
+                    formData.append('confirmarTurno', '1');
                     const novoResult = await api.postApresentacao(formData);
                     await processarRespostaApresentacao(novoResult, formData);
                 } else {
@@ -470,6 +491,9 @@ async function aoEnviarJustificativaApresentacao(evento) {
     const botao = form.querySelector('button[type="submit"]');
     const dadosForm = new URLSearchParams(new FormData(form));
 
+    dadosForm.append('supervisao', supervisaoAtual);
+    dadosForm.append('local', localAtual);
+
     botao.disabled = true;
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
@@ -491,11 +515,11 @@ function aoJustificativaApresentacaoOK() {
     const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
     if (empregadoArmazenadoJSON) {
         const empregado = JSON.parse(empregadoArmazenadoJSON);
-        // Atualiza o status local para o app saber que a justificativa foi enviada
+
         empregado.statusApresentacao = 'JUSTIFICATIVA_OK';
         localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
     }
-    carregarEMontarTabela(); // Recarrega a tabela para mostrar o texto amarelo
+    carregarEMontarTabela();
 }
 
 /**
@@ -517,7 +541,6 @@ async function aoEnviarProntidao(evento) {
     const select = form.querySelector('#justificativaProntidao');
     if (select) select.disabled = true;
 
-    // Mostra 'loading' no botão clicado
     if (evento.submitter && evento.submitter.id === 'botaoProntidao') {
         if(botaoPronto) botaoPronto.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
     } else if (botaoJustificar) {
@@ -550,13 +573,11 @@ async function aoEnviarFimJornada(evento) {
     const botaoJustificativa = form.querySelector('.btn-danger');
     const dadosForm = new URLSearchParams(new FormData(form));    
     
-    // Desabilita tudo
     if (botaoNormal) botaoNormal.disabled = true;
     if (botaoJustificativa) botaoJustificativa.disabled = true;
     const select = form.querySelector('select');
     if (select) select.disabled = true;
 
-    // Define 'loading'
     if (evento.submitter && evento.submitter.classList.contains('botaoFimJornada')) {
         botaoNormal.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Encerrando...';
     } else if (botaoJustificativa) {
@@ -566,36 +587,12 @@ async function aoEnviarFimJornada(evento) {
     const result = await api.postFimJornada(dadosForm);
 
     if (result.success === true) {
-        // Sucesso: apenas recarrega a tabela. O 'localStorage' NÃO é limpo aqui.
         carregarEMontarTabela();
     } else {
         alert(`Erro ao encerrar jornada: ${result.message}`);
-        // Reabilita em caso de erro
         if (botaoNormal) botaoNormal.disabled = false;
         if (botaoJustificativa) botaoJustificativa.disabled = false;
         if (select) select.disabled = false;
     }
 }
 
-// --- PONTO DE ENTRADA ---
-
-async function init(supervisao, local) {
-    supervisaoAtual = supervisao;
-    localAtual = local;
-
-    montarLayout();
-    habilitarApresentacao();
-
-    vincularListenersDinamicos();
-
-    await carregarEMontarTabela();
-
-    if (intervaloPollingTabela) clearInterval(intervaloPollingTabela);
-    intervaloPollingTabela = setInterval(() => carregarEMontarTabela(), 40000);
-
-    iniciarRelogio();
-}
-
-export const viewLocal = {
-    init: init
-};
