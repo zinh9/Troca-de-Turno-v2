@@ -50,6 +50,7 @@ sqlTabela = _
 "SELECT " & _
 "ld.detalhe AS nome, " & _
 "ld.usuario_dss AS matricula, " & _
+"ld.JOB_DESC AS cargo, " & _
 "ra.data_hora_apresentacao AS apresentacao, " & _
 "ra.data_hora_prontidao_ra AS prontidao, " & _
 "ra.status_funcionario AS status, " & _
@@ -75,12 +76,12 @@ sqlTabela = _
 "AND Now() <= DateAdd('n', 870, ra.data_hora_apresentacao) "
 
 ' Condição que verifica se o filtro de torre foi passado no parametro e concatena com o SQL com um AND
-If qsSup <> "" Then
+If qsSup <> "" or isnull(qsSup) Then
     sqlTabela = sqlTabela & "AND ra.supervisao_ra = '" & qsSup & "' "
 End If
 
 ' Condição que verifica se o guarita de torre foi passado no parametro e concatena com o SQL com um AND
-If qsLoc <> "" Then
+If qsLoc <> "" or isnull(qsLoc) Then
     sqlTabela = sqlTabela & "AND ra.local_trabalho_ra = '" & qsLoc & "' "
 End If
 
