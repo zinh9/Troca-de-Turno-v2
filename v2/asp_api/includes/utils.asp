@@ -34,6 +34,8 @@ function buildJSONTabela(rs)
             str = str & "{"
             str = str & " ""matricula"":""" & EscapeJSON(rs("matricula")) & ""","
             str = str & " ""nome"":""" & ucase(EscapeJSON(rs("nome"))) & ""","
+            str = str & " ""cargo"":""" & ucase(EscapeJSON(reduzirNomeFuncao(rs("cargo")))) & ""","
+            str = str & " ""local"":""" & EscapeJSON(replace(rs("local"), "_", " ")) & ""","
             str = str & " ""apresentacao"":""" & verifyDateTimeNullCorrect(rs("apresentacao")) & ""","
             str = str & " ""justificativaApresentacao"":""" & EscapeJSON(rs("justificativa_apresentacao")) & ""","
             str = str & " ""horarioRef"":""" & rs("ref_horas") & ":" & rs("ref_minutos") & ""","
