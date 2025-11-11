@@ -31,12 +31,14 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_apresentacao.asp`;
 
+            
+
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: formData
+                body: formData,
             });
     
             if (!response) {
@@ -91,6 +93,10 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_update_just_apresentacao.asp`;
 
+            // for (let [key, value] of formData.entries()) {
+            //     console.log(`FormData - ${key}: ${value}`);
+            // }
+
             const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
@@ -112,9 +118,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_fim_jornada.asp`;
 
-            for (let [key, value] of formData.entries()) {
-                console.log(`FormData - ${key}: ${value}`);
-            }
+            
 
             const response = await fetch(url, {
                 method: 'POST',
