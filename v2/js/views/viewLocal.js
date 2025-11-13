@@ -1,6 +1,5 @@
 import { api } from '../services/apiService.js';
-import { horaParaMinutos } from '../utils/helpers.js';
-import { iniciarRelogio } from '../utils/helpers.js';
+import { horaParaMinutos, iniciarRelogio, iniciarCronometro } from '../utils/helpers.js';
 
 let supervisaoAtual = null;
 let localAtual = null;
@@ -161,19 +160,21 @@ function montarLinhasTabela(empregados, horarioReferencia) {
             ? 'JUSTIFICAR' 
             : emp.statusApresentacao;
 
+        const lancheStatus = (empregadoAtivo && empregadoArmazenado.lancheStatus) 
+            ? empregadoArmazenado.lancheStatus 
+            : emp.lancheStatus;
+
+        const refeicaoStatus = (empregadoAtivo && empregadoArmazenado.refeicaoStatus) 
+            ? empregadoArmazenado.refeicaoStatus 
+            : emp.refeicaoStatus;
+
         let apresentacaoHtml = '';
-        if (statusApresentacao === 'OK') {
+        if (statusApresentacao === 'OK' || (emp.apresentacao && !emp.justificativaApresentacao || emp.justificativaApresentacao === '')) {
             apresentacaoHtml =`<span class="text-white">${emp.apresentacao}</span>`;
-        } else if (statusApresentacao === 'JUSTIFICATIVA_OK') {
+        } else if (statusApresentacao === 'JUSTIFICATIVA_OK' || (emp.apresentacao && emp.justificativaApresentacao)) {
             apresentacaoHtml =  `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
         } else if (statusApresentacao === 'JUSTIFICAR') {
             apresentacaoHtml = renderizarFormJustificativaApresentacao(emp.matricula);
-        } else {
-            const horaApresentacao = horaParaMinutos(emp.apresentacao);
-            const horaReferencia = horaParaMinutos(horarioReferencia);
-            apresentacaoHtml = horaApresentacao <= horaReferencia
-            ? `<span class="text-white">${emp.apresentacao}</span>`
-            : `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao || 'Atrasado'}">${emp.apresentacao}</span>`;
         }
 
         let prontidaoHtml = 'Aguardando...';
@@ -183,9 +184,27 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         } else if (emp.statusProntidao === 'Pronto com atraso') {
             prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`
         } else if (emp.statusProntidao === 'Pronto') {
-            prontidaoHtml = `<span class="text-success">${emp.prontidao}</span>`
+            prontidaoHtml = `<span class="text-success">${emp.prontidao}</span>`;
         }
 
+        let lancheHtml = '--:--';
+        if (lancheStatus.startsWith('TIMER_LANCHE:')) {
+            lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split(':')[1]}"></div>`;
+        } else if (lancheStatus.startsWith('ACAO_')) {
+            lancheHtml = `<button class="btn btn-success btn-sm btn-lanche" data-matricula="${emp.matricula}">Solicitar Lanche</button>`;
+        } else {
+            lancheHtml = `<span class="text-white">${emp.lancheStatus}</span>`;
+        }
+        
+        let refeicaoHtml = '--:--';
+        if (refeicaoStatus.startsWith('TIMER_REFEICAO:')) {
+            refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${refeicaoStatus.split(':')[1]}"></div>`;
+        } else if (refeicaoStatus.startsWith('ACAO_')) {
+            refeicaoHtml = `<button class="btn btn-success btn-sm btn-refeicao" data-matricula="${emp.matricula}">Solicitar Refeição</button>`;
+        } else {
+            refeicaoHtml = `<span class="text-white">${emp.refeicaoStatus}</span>`;
+        }
+        
         let fimJornadaHtml = '--:--';
         if (emp.fimJornada && !emp.justificativaFimJornada) {
             fimJornadaHtml = '<span class="text-success"><i class="fa-solid fa-check"></i></span>';
@@ -201,9 +220,9 @@ function montarLinhasTabela(empregados, horarioReferencia) {
             <td>${emp.nome}</td>
             <td>${apresentacaoHtml}</td>
             <td>${prontidaoHtml}</td>
-            <td></td>
-            <td></td>
-            <td class="text-center">${fimJornadaHtml}</td>
+            <td>${lancheHtml}</td>
+            <td>${refeicaoHtml}</td>
+            <td>${fimJornadaHtml}</td>
         `;
         fragmento.appendChild(linha);
     });
@@ -291,6 +310,16 @@ function verificarEstadoLocal() {
                 if (document.getElementById('prontidao-dinamica-container')) {
                     habilitarProntidao(empregado.matricula, empregado.horarioApresentacao);
                 }
+
+                const containerLanche = document.querySelector('.cronometro-lanche');
+                if (containerLanche) {
+                    iniciarCronometro(containerLanche, containerLanche.dataset.starttime, 15);
+                }
+
+                const containerRefeicao = document.getElementById('.cronometro-refeicao');
+                if (containerRefeicao) {
+                    iniciarCronometro(containerRefeicao, containerRefeicao.dataset.starttime, 60);
+                }
             } else {
                 // Empregado está em outro terminal/página, limpa o storage
                 localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
@@ -377,7 +406,12 @@ function habilitarProntidao(matricula, horarioApresentacao) {
 function limparProntidao() {
     if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
     // Limpa o storage pois a "sessão" (Apresentação -> Prontidão) terminou
-    localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
+    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+    if (empregadoArmazenadoJSON) {
+        const empregado = JSON.parse(empregadoArmazenadoJSON);
+        empregado.statusProntidao = 'Pronto';
+        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+    }
     carregarEMontarTabela();
 }
 
@@ -402,6 +436,24 @@ function listenersDinamicos() {
 
         if (form.id === 'formFimJornada') {
             aoEnviarFimJornada(evento);
+        }
+    });
+
+    tbody.addEventListener('click', (evento) => {
+        const target = evento.target.closest('button');
+        if (!target) console.log("não achei");
+        
+        const matricula = target.dataset.matricula;
+        
+        console.log(matricula);
+        if (!matricula) return;
+        
+        if (target.classList.contains('btn-lanche')) {
+            aoEnviarLanche(target, matricula);
+        }
+
+        if (target.classList.contains('btn-refeicao')) {
+            aoEnviarRefeicao(target, matricula);
         }
     });
 }
@@ -563,6 +615,58 @@ async function aoEnviarProntidao(evento) {
     }
 }
 
+async function aoEnviarLanche(botao, matricula) {
+    botao.disabled = true;
+    botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+
+    const formData = new URLSearchParams();
+    formData.append('matricula', matricula);
+
+    const result = api.postLanche(formData);
+
+    if (result.success) {
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        if (empregadoArmazenadoJSON) {
+            const empregado = JSON.parse(empregadoArmazenadoJSON);
+            if (String(empregado.matricula === String(matricula))) {
+                empregado.lancheStatus = "TIMER_LANCHE:" + result.horarioApresentacao;
+                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+            }
+        }
+        await carregarEMontarTabela();
+    } else {
+        alert(result.message || 'Erro ao registrar lanche.');
+        botao.disabled = false;
+        botao.innerHTML = 'Solicitar Lanche';
+    }
+}
+
+async function aoEnviarRefeicao(botao, matricula) {
+    botao.disabled = true;
+    botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+
+    const formData = new URLSearchParams();
+    formData.append('matricula', matricula);
+
+    const result = api.postRefeicao(formData);
+
+    if (result.success) {
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        if (empregadoArmazenadoJSON) {
+            const empregado = JSON.parse(empregadoArmazenadoJSON);
+            if (String(empregado.matricula === String(matricula))) {
+                empregado.refeicaoStatus = "TIMER_REFEICAO:" + result.horarioApresentacao;
+                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+            }
+        }
+        await carregarEMontarTabela();
+    } else {
+        alert(result.message || 'Erro ao registrar Refeição.');
+        botao.disabled = false;
+        botao.innerHTML = 'Solicitar Refeição';
+    }
+}
+
 /**
  * Handler: Envio do formulário de Fim de Jornada (Regra 2)
  */
@@ -587,7 +691,14 @@ async function aoEnviarFimJornada(evento) {
     const result = await api.postFimJornada(dadosForm);
 
     if (result.success === true) {
-        carregarEMontarTabela();
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        if (empregadoArmazenadoJSON) {
+            const empregado = JSON.parse(empregadoArmazenadoJSON);
+            if (String(empregado.matricula) === String(dadosForm.get('matricula'))) {
+                localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
+            }
+        }
+        await carregarEMontarTabela();
     } else {
         alert(`Erro ao encerrar jornada: ${result.message}`);
         if (botaoNormal) botaoNormal.disabled = false;
