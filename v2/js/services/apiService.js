@@ -133,4 +133,79 @@ export const api = {
             return { success: false, message: error.message };
         }
     },
+    postChamadaCPT: async (formData) => {
+        try {
+            const url = `${API_BASE_URL}post_chamada_CPT.asp`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+            });
+
+            const dados = await response.json();
+            return dados;
+        } catch (error) {
+            console.error("Falha ao enviar dados Chamada CPT: ", error);
+            alert("Erro na requisição de Chamada CPT: ", error.message);
+            return { success: false, message: error.message };
+        }
+    },
+    postLanche: async (formData) => {
+        try {
+            const url = `${API_BASE_URL}post_lanche.asp`
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData,
+            });
+
+            const dados = await response.json();
+            return dados;
+        } catch (error) {
+            console.error("Falha ao enviar dados Lanche: ", error);
+            alert("Erro na requisição de Lanche: ", error.message);
+            return { success: false, message: error.message };
+        }
+    },
+    postRefeicao: async (formData) => {
+        try {
+            const url = `${API_BASE_URL}post_refeicao.asp`
+
+            for (let [key, value] of formData.entries()) {
+                console.log(`FormData - ${key}: ${value}`);
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+            });
+
+            const dados = await response.json();
+            return dados;
+        } catch (error) {
+            console.error("Falha ao enviar dados Refeição: ", error);
+            alert("Erro na requisição de Refeição: ", error.message);
+            return { success: false, message: error.message };
+        }
+    },
+    postFimJornadaCPT: async (formData) => {
+        try {
+            const url = `${API_BASE_URL}post_fim_jornada_CPT.asp`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+            });
+
+            const dados = await response.json();
+            return dados;
+        } catch (error) {
+            console.error("Falha ao enviar dados Fim de Jornada CPT: ", error);
+            alert("Erro na requisição de Fim de Jornada CPT: ", error.message);
+            return { success: false, message: error.message };
+        }
+    },
 }
