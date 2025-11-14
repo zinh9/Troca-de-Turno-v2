@@ -20,6 +20,8 @@ set fso = server.CreateObject("Scripting.FileSystemObject")
 qsSup = request.querystring("sup")
 qsLoc = request.querystring("loc")
 
+on error resume next
+
 set conn = getConexao()
 
 dim h_formatado, strNomeFormatado
@@ -43,60 +45,94 @@ else
 end if
 
 dim strUltimaAtt
-
 strUltimaAtt = ultimaAtualizacao(qsSup) ' Adicionar a função de utils para mostrar a ultima atualização
+
+dim sqlCounts
+sqlCounts = "SELECT " & _
+    "  ra_inner.local_trabalho_ra, " & _
+    "  COUNT(*) AS totalNoLocal, " & _
+    "  SUM(IIF(ra_inner.data_hora_lanche_patio IS NOT NULL AND Hour(ra_inner.data_hora_lanche_patio) < 12, 1, 0)) AS lancheManhaCount " & _
+    "FROM registros_apresentacao AS ra_inner " & _
+    "WHERE DateValue(ra_inner.data_hora_apresentacao) >= Date() - 1 " & _
+    "  AND Now() <= DateAdd('n', 870, ra_inner.data_hora_apresentacao) "
+
+If qsSup <> "" Then
+    sqlCounts = sqlCounts & "AND ra_inner.supervisao_ra = '" & qsSup & "' "
+End If
+
+sqlCounts = sqlCounts & "GROUP BY ra_inner.local_trabalho_ra"
 
 sqlTabela = _
 "SELECT " & _
-"ld.detalhe AS nome, " & _
-"ld.usuario_dss AS matricula, " & _
-"ld.JOB_DESC AS cargo, " & _
-"ra.data_hora_apresentacao AS apresentacao, " & _
-"ra.data_hora_prontidao_ra AS prontidao, " & _
-"ra.status_funcionario AS status, " & _
-"ra.supervisao_ra AS sup, " & _
-"ra.local_trabalho_ra AS local, " & _
-"ra.justificativa_atraso_prontidao AS justificativa_prontidao, " & _
-"ra.justificativa_atraso_apresentacao AS justificativa_apresentacao, " & _
-"ld.horario_login_dss AS turno, " & _
-"ra.data_hora_lanche_patio AS lanche, " & _
-"ra.data_hora_lanche_CPT AS lanche_CPT, " & _
-"ra.data_hora_refeicao_patio AS refeicao, " & _
-"ra.data_hora_refeicao_CPT AS refeicao_CPT, " & _
-"ra.justificativa_atraso_fim_jornada AS justificativa_fim_jornada, " & _
-"ra.fim_jornada, " & _
-"hr.ref_horas, " & _
-"hr.ref_minutos, " & _
-"DateAdd('n', hr.ref_horas*60 + hr.ref_minutos, DateValue(ra.data_hora_apresentacao)) AS dataReferencia " & _
-"FROM (registros_apresentacao ra " & _
-"INNER JOIN login_dss ld ON ra.usuario_dss = ld.usuario_dss) " & _
-"INNER JOIN horarios_referencia hr ON ra.local_trabalho_ra = hr.local_trabalho_ra AND ld.horario_login_dss = hr.turno_funcionario " & _
-"WHERE ((DateValue(ra.data_hora_apresentacao) = Date() AND TimeValue(ra.data_hora_apresentacao) <= #23:59:59#) " & _
-"OR (DateValue(ra.data_hora_apresentacao) = Date() - 1 AND TimeValue(ra.data_hora_apresentacao) >= #00:00:00#)) " & _
-"AND Now() <= DateAdd('n', 870, ra.data_hora_apresentacao) "
+"  ld.detalhe AS nome, " & _
+"  ld.usuario_dss AS matricula, " & _
+"  ra.supervisao_ra AS sup, " & _
+"  ra.local_trabalho_ra AS local, " & _
+"  ld.horario_login_dss AS turno, " & _
+"  Format(ra.data_hora_apresentacao, 'hh:nn') AS apresentacao, " & _
+"  ra.data_hora_apresentacao AS dataHoraApresentacaoCompleta, " & _
+"  ra.justificativa_atraso_apresentacao AS justificativaApresentacao, " & _
+"  Format(ra.data_hora_prontidao_ra, 'hh:nn') AS prontidao, " & _
+"  ra.status_funcionario AS statusProntidao, " & _
+"  ra.justificativa_atraso_prontidao AS justificativaProntidao, " & _
+"  ra.data_hora_lanche_patio AS lanche, " & _
+"  ra.data_hora_refeicao_patio AS refeicao, " & _
+"  Format(ra.fim_jornada, 'hh:nn') AS fimJornada, " & _
+"  ra.justificativa_atraso_fim_jornada AS justificativaFimJornada, " & _
+"  ra.chamada_CPT, " & _
+"  ra.fim_jornada_CPT, " & _
+"  IIF(ra.fim_jornada IS NULL, IIF(DateDiff('n', DateAdd('h', 12, ra.data_hora_apresentacao), Now()) > 1, true, false), false) AS statusFimJornada, " & _
+"  IIF(ld.JOB_DESC='OFICIAL OPERACAO FERROVIARIA' OR ld.JOB_DESC='OFICIAL OP FERROV FORM PROFIS', 'OOF', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV ESP', 'INSPETOR ESP', IIF(ld.JOB_DESC='MAQUINISTA PATIO' OR ld.JOB_DESC='MAQUINISTA', 'MAQ', IIF(ld.JOB_DESC='TECNICO OPERACAO FERROVIARIA', 'TOF', IIF(ld.JOB_DESC='TRAINEE OPERACIONAL', 'TRAINEE', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV I', 'INSPETOR I', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV II', 'INSPETOR II', IIF(ld.JOB_DESC='OPERADOR LOCOMOTIVA REMOTO I', 'MAQ REMOTO I', IIF(ld.JOB_DESC='OPERADOR LOCOMOTIVA REMOTO II', 'MAQ REMOTO II', IIF(ld.JOB_DESC='TECNICO OPERACAO', 'TO', ld.JOB_DESC)))))))))) AS cargo, " & _
+"  Counts.totalNoLocal, " & _
+"  Counts.lancheManhaCount, " & _
+"  CInt(IIF(Counts.totalNoLocal Mod 2 = 0, Counts.totalNoLocal / 2, (Counts.totalNoLocal - 1) / 2 + 1)) AS metadeTurma " & _
+"FROM (registros_apresentacao AS ra " & _
+"LEFT JOIN login_dss AS ld ON ra.usuario_dss = ld.usuario_dss) " & _
+"LEFT JOIN (" & sqlCounts & ") AS Counts ON ra.local_trabalho_ra = Counts.local_trabalho_ra " & _
+"WHERE ra.data_hora_apresentacao >= Date() - 1 " & _
+"  AND Now() <= DateAdd('n', 870, ra.data_hora_apresentacao) "
 
-' Condição que verifica se o filtro de torre foi passado no parametro e concatena com o SQL com um AND
-If qsSup <> "" or isnull(qsSup) Then
+If qsSup <> "" Then
     sqlTabela = sqlTabela & "AND ra.supervisao_ra = '" & qsSup & "' "
 End If
 
-' Condição que verifica se o guarita de torre foi passado no parametro e concatena com o SQL com um AND
-If qsLoc <> "" or isnull(qsLoc) Then
+If qsLoc <> "" Then
     sqlTabela = sqlTabela & "AND ra.local_trabalho_ra = '" & qsLoc & "' "
 End If
 
+
 ' Concatenar com o SQL para trazer o registro mais recente
 sqlTabela = sqlTabela & "ORDER BY ra.data_hora_apresentacao DESC;"
+
+' response.write sqlTabela & "<br>"
 
 set rsTabela = conn.execute(sqlTabela)
 
 jsonInfo = buildJSONInfo(strNomeFormatado, strUltimaAtt, h_formatado)
 jsonTabela = buildJSONTabela(rsTabela)
 
+if err.number <> 0 then
+    message = "Erro na consulta do banco: " & err.description
+    response.write message
+else
+    if not rsTabela is nothing then
+        if rsTabela.state = 1 then ' 1 = aberto
+            rsTabela.close
+        end if
+    end if
+    if not conn is nothing then
+        if conn.state = 1 then
+            conn.close
+        end if
+    end if
+end if
+
 rsTabela.close
 set rsTabela = nothing
 conn.close
 set conn = nothing
+
+on error goto 0
 
 response.write "{""success"":true,""info"":" & jsonInfo & ", ""empregados"":" & jsonTabela & "}"
 response.end

@@ -30,14 +30,14 @@ if justificativa = "" or isnull(justificativa) then
     "fim_jornada = Now() " & _
     "WHERE usuario_dss = '" & matricula & "' " & _
     "AND fim_jornada IS NULL " & _
-    "AND (DateValue(data_hora_apresentacao) = Date())"
+    "AND (DateValue(data_hora_apresentacao) = Date() OR DateValue(data_hora_apresentacao) = Date() - 1)"
 else
     sql = "UPDATE registros_apresentacao SET " & _
     "fim_jornada = Now(), " & _
     "justificativa_atraso_fim_jornada = '" & justificativa & "' " & _
     "WHERE usuario_dss = '" & matricula & "' " & _
     "AND fim_jornada IS NULL " & _
-    "AND (DateValue(data_hora_apresentacao) = Date())"
+    "AND (DateValue(data_hora_apresentacao) = Date() OR DateValue(data_hora_apresentacao) = Date() - 1)"
 end if
 
 set conn = getConexao()

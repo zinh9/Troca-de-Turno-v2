@@ -1,4 +1,4 @@
-<%@ Language=VBScript %>
+﻿<%@ Language=VBScript %>
 <!--#include file='includes/conexao.asp'-->
 <!--#include file='includes/utils.asp'-->
 <%
@@ -27,7 +27,7 @@ dim statusApresentacao, sqlInsert, sqlUpdateTurno
 ' supervisao =  "PV_AB" 
 ' local = "Aroaba" 
 ' confirmadoSupervisao = "1" 
-' confirmadoTurno = "0" 
+' confirmadoTurno = "1" 
 
 matricula = request.form("matricula")
 supervisao =  request.form("supervisao")
@@ -120,19 +120,21 @@ if rsRef.eof then
 else
     horaRef = cint(rsRef("ref_horas"))
     minRef = cint(rsRef("ref_minutos"))
-    horaAtual = Hour(horarioRegistro)
-    minAtual = Minute(horarioRegistro)
+    horaAtual = hour(horarioRegistro)
+    minAtual = minute(horarioRegistro)
 
     minutosTotalRef = (horaRef * 60) + minRef
     minutosTotalAtual = (horaAtual * 60) + minAtual
 
     if minutosTotalAtual > minutosTotalRef then
         statusApresentacao = "JUSTIFICAR"
+        ' response.write minutosTotalAtual & " " & minutosTotalRef & " " & statusApresentacao
     else
         statusApresentacao = "OK"
     end if
 end if
 rsRef.close
+
 
 sqlInsert = "INSERT INTO registros_apresentacao (usuario_dss, data_hora_apresentacao, supervisao_ra, local_trabalho_ra, supervisao_original_ra) " & _
 "VALUES ('" & matricula & "', Now(), '" & supervisao & "', '" & local & "', '" & supervisaoOriginal & "')"
