@@ -188,12 +188,27 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         }
 
         let lancheHtml = '--:--';
-        if (lancheStatus && lancheStatus.startsWith('TIMER_LANCHE.')) {
+        if (lancheStatus && lancheStatus === 'HABILITAR_ESCOLHA') {
+            lancheHtml = `
+                <div class="d-flex justify-content-center">
+                    <div class="input-group input-group-sm shadow-sm rounded w-75">
+                        <select class="form-select" name="escolhaIntervalo" id="escolhaIntervalo" required>
+                            <option value="" disabled selected>Escolha o intervalo</option>
+                            <option value="CEDO">CEDO</option>
+                            <option value="TARDE">TARDE</option>
+                        </select>
+                        <button type="button" class="btn btn-success btn-sm btn-escolha" data-matricula="${emp.matricula}">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else if (lancheStatus && lancheStatus.startsWith('TIMER_LANCHE.')) {
             lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split('.')[1]}"></div>`;
         } else if (lancheStatus && lancheStatus.startsWith('ACAO_')) {
             lancheHtml = `<button class="btn btn-success btn-sm btn-lanche" data-matricula="${emp.matricula}">Solicitar Lanche</button>`;
         } else {
-            lancheHtml = `<span class="text-warning">${emp.lancheStatus.split('-')[1]}</span>`;
+            lancheHtml = `<span class="text-warning">${emp.lancheStatus}</span>`;
         }
         
         let refeicaoHtml = '--:--';
@@ -448,6 +463,10 @@ function listenersDinamicos() {
         
         console.log(matricula);
         if (!matricula) return;
+
+        if (target.classList.contains('btn-escolha')) {
+            aoEnviarEscolhaIntervalo(target, matricula);
+        }
         
         if (target.classList.contains('btn-lanche')) {
             aoEnviarLanche(target, matricula);
@@ -642,6 +661,30 @@ async function aoEnviarLanche(botao, matricula) {
     }
 }
 
+async function aoEnviarEscolhaIntervalo(botao, matricula) {
+    botao.disabled = true;
+    const select = document.getElementById('escolhaIntervalo');
+    const valor = select.value;
+    const formData = new URLSearchParams();
+    console.log('opa')
+
+    select.disabled = true;
+    select.innerHTML = 'Registrando <i class="fas fa-spinner fa-spin"></i>'
+
+    formData.append('matricula', matricula);
+    formData.append('escolhaIntervalo', valor);
+
+    const result = await api.postEscolhaIntervalo(formData);
+
+    if (result.success) {
+        await carregarEMontarTabela();
+    } else {
+        alert(result.message || 'Erro ao registrar Escolha.');
+        select.disabled = false;
+        botao.disabled = false;
+    }
+}
+
 async function aoEnviarRefeicao(botao, matricula) {
     botao.disabled = true;
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
@@ -649,7 +692,7 @@ async function aoEnviarRefeicao(botao, matricula) {
     const formData = new URLSearchParams();
     formData.append('matricula', matricula);
 
-    const result = api.postRefeicao(formData);
+    const result = await api.postRefeicao(formData);
 
     if (result.success) {
         const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
