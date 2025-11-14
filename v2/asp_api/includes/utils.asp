@@ -50,7 +50,7 @@ function buildJSONTabela(rs)
             str = str & " ""statusProntidao"":""" & rs("statusProntidao") & ""","
             str = str & " ""justificativaProntidao"":""" & EscapeJSON(rs("justificativaProntidao")) & ""","
             str = str & " ""lancheStatus"":""" & EscapeJSON(lancheStatus) & ""","
-            str = str & " ""intervaloLanche"":""" & EscapeJSON(rs("intervaloLanche")) & ""","
+            ' str = str & " ""intervaloLanche"":""" & EscapeJSON(rs("intervaloLanche")) & ""","
             str = str & " ""refeicaoStatus"":""" & EscapeJSON(refeicaoStatus) & ""","
             str = str & " ""statusFimJornada"":" & lcase(rs("statusFimJornada")) & ","
             str = str & " ""fimJornada"":""" & (rs("fimJornada")) & ""","
@@ -80,20 +80,9 @@ function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount
 
     select case turno
         case "05x17", "06x18"
-            ' Se o empregado almoçou o campo refeicao não é nulo, seu lanche é na parte da tarde
-            if isnull(refeicao) or refeicao = "" then
-                if lancheManhaCount < metadeTurma then
-                    if agora <= timeserial(8, 0, 0) then
-                        GetLancheStatus = "08:00 ás 10:30"
-                    elseif agora <= timeserial(10, 30, 0) then
-                        GetLancheStatus = "ACAO_LANCHE_MANHA-08:00 ás 10:30"
-                    else
-                        GetLancheStatus = "PROXIMO-14:00 ás 16:30"
-                    end if
-                else
-                    GetLancheStatus = "14:00 ás 16:30"
-                end if
-            elseif not isnull(refeicao) or refeicao <> "" then
+            if (intervaloLanche = "" or isnull(intervaloLanche)) and lancheManhaCount < metadeTurma and agora <= timeserial(14, 30, 0) then ' ALTERAR PARA 10:30
+                GetLancheStatus = "HABILITAR_ESCOLHA"
+            elseif (intervaloLanche = "" or isnull(intervaloLanche)) and lancheManhaCount < metadeTurma and agora > timeserial(14, 30, 0) then ' ALTERAR PARA 10:30
                 if agora <= timeserial(14, 0, 0) then
                     GetLancheStatus = "14:00 ás 16:30"
                 elseif agora <= timeserial(16, 30, 0) then
@@ -102,8 +91,47 @@ function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount
                     GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
             else
-                GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+                if intervaloLanche = "CEDO" then
+                    if agora <= timeserial(8, 0, 0) then
+                        GetLancheStatus = "08:00 ás 10:30"
+                    elseif agora <= timeserial(10, 30, 0) then
+                        GetLancheStatus = "ACAO_LANCHE_MANHA-08:00 ás 10:30"
+                    else
+                        GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+                    end if
+                elseif intervaloLanche = "TARDE" or intervaloLanche = "" then
+                    if agora <= timeserial(14, 0, 0) then
+                        GetLancheStatus = "14:00 ás 16:30"
+                    elseif agora <= timeserial(16, 30, 0) then
+                        GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 ás 16:30"
+                    else
+                        GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+                    end if
+                end if
             end if
+            ' if isnull(refeicao) or refeicao = "" then
+            '     if lancheManhaCount < metadeTurma then
+            '         if agora <= timeserial(8, 0, 0) then
+            '             GetLancheStatus = "08:00 ás 10:30"
+            '         elseif agora <= timeserial(10, 30, 0) then
+            '             GetLancheStatus = "ACAO_LANCHE_MANHA-08:00 ás 10:30"
+            '         else
+            '             GetLancheStatus = "PROXIMO-14:00 ás 16:30"
+            '         end if
+            '     else
+            '         GetLancheStatus = "14:00 ás 16:30"
+            '     end if
+            ' elseif not isnull(refeicao) or refeicao <> "" then
+            '     if agora <= timeserial(14, 0, 0) then
+            '         GetLancheStatus = "14:00 ás 16:30"
+            '     elseif agora <= timeserial(16, 30, 0) then
+            '         GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 ás 16:30"
+            '     else
+            '         GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            '     end if
+            ' else
+            '     GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            ' end if
         case "12x00"
             if agora <= timeserial(14, 0, 0) then
                 GetLancheStatus = "14:00 ás 17:00"
@@ -165,19 +193,19 @@ function GetRefeicaoStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCou
                 else
                     GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
-            elseif isnull(lanche) or lanche = "" then
-                if agora <= timeserial(10, 30, 0) then
-                    GetRefeicaoStatus = "10:30 ás 12:30"
-                elseif agora <= timeserial(12, 30, 0) then
-                    GetRefeicaoStatus = "ACAO_REFEICAO_CEDO-10:30 ás 12:30"
-                else
-                    GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
-                end if
             elseif lancheManhaCount < metadeTurma and (isnull(lanche) or lanche = "") then
                 if agora <= timeserial(10, 30, 0) then
                     GetRefeicaoStatus = "10:30 ás 14:00"
                 elseif agora <= timeserial(14, 0, 0) then
                     GetRefeicaoStatus = "ACAO_REFEICAO-10:30 ás 14:00"
+                else
+                    GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+                end if
+            elseif isnull(lanche) or lanche = "" then
+                if agora <= timeserial(10, 30, 0) then
+                    GetRefeicaoStatus = "10:30 ás 12:30"
+                elseif agora <= timeserial(12, 30, 0) then
+                    GetRefeicaoStatus = "ACAO_REFEICAO_CEDO-10:30 ás 12:30"
                 end if
             else
                 GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
