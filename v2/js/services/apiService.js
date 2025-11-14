@@ -170,20 +170,40 @@ export const api = {
             return { success: false, message: error.message };
         }
     },
-    postRefeicao: async (formData) => {
+    postEscolhaIntervalo: async (formData) => {
         try {
-            const url = `${API_BASE_URL}post_refeicao.asp`
-
-            for (let [key, value] of formData.entries()) {
-                console.log(`FormData - ${key}: ${value}`);
-            }
+            const url = `${API_BASE_URL}post_escolha_lanche.asp`
 
             const response = await fetch(url, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
                 body: formData,
             });
 
             const dados = await response.json();
+            return dados;
+        } catch (error) {
+            console.error("Falha ao enviar dados Escolha: ", error);
+            alert("Erro na requisição de Escolha: ", error.message);
+            return { success: false, message: error.message };
+        }
+    },
+    postRefeicao: async (formData) => {
+        try {
+            const url = `${API_BASE_URL}post_refeicao.asp`
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData,
+            });
+
+            const dados = await response.json();
+            console.log(dados);
             return dados;
         } catch (error) {
             console.error("Falha ao enviar dados Refeição: ", error);
