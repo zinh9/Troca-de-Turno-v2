@@ -129,8 +129,10 @@ function montarLinhasTabela(empregados) {
         let lancheHtml = '';
         if (emp.lancheStatus && emp.lancheStatus.startsWith('TIMER_LANCHE.')) {
             lancheHtml = `<div class="cronometro-lanche" data-starttime="${emp.lancheStatus.split('.')[1]}"></div>`;
-        } else {
+        } else if (emp.lancheStatus && emp.lancheStatus.startsWith('ACAO_')) {
             lancheHtml = `<span class="text-warning">${emp.lancheStatus.split('-')[1]}</span>`;
+        } else {
+            lancheHtml = `<span class="text-warning">${emp.lancheStatus}</span>`;
         }
 
         let refeicaoHtml = '';
