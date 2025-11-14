@@ -179,7 +179,7 @@ function montarLinhasTabela(empregados, horarioReferencia) {
 
         let prontidaoHtml = 'Aguardando...';
         // O timer de prontidão SÓ aparece para o usuário ATIVO (do localStorage)
-        if (empregadoAtivo && (!emp.prontidao || emp.prontidao !== '')) { // Ver com o cabeça para adicionar (&& statusApresentacao !== 'JUSTIFICAR')
+        if (empregadoAtivo && !emp.prontidao) { // Ver com o cabeça para adicionar (&& statusApresentacao !== 'JUSTIFICAR')
             prontidaoHtml = '<div id="prontidao-dinamica-container"></div>';
         } else if (emp.statusProntidao === 'Pronto com atraso') {
             prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`
@@ -188,21 +188,21 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         }
 
         let lancheHtml = '--:--';
-        if (lancheStatus.startsWith('TIMER_LANCHE:')) {
-            lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split(':')[1]}"></div>`;
-        } else if (lancheStatus.startsWith('ACAO_')) {
+        if (lancheStatus && lancheStatus.startsWith('TIMER_LANCHE.')) {
+            lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split('.')[1]}"></div>`;
+        } else if (lancheStatus && lancheStatus.startsWith('ACAO_')) {
             lancheHtml = `<button class="btn btn-success btn-sm btn-lanche" data-matricula="${emp.matricula}">Solicitar Lanche</button>`;
         } else {
-            lancheHtml = `<span class="text-white">${emp.lancheStatus}</span>`;
+            lancheHtml = `<span class="text-warning">${emp.lancheStatus.split('-')[1]}</span>`;
         }
         
         let refeicaoHtml = '--:--';
-        if (refeicaoStatus.startsWith('TIMER_REFEICAO:')) {
-            refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${refeicaoStatus.split(':')[1]}"></div>`;
-        } else if (refeicaoStatus.startsWith('ACAO_')) {
+        if (refeicaoStatus && refeicaoStatus.startsWith('TIMER_REFEICAO.')) {
+            refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${refeicaoStatus.split('.')[1]}"></div>`;
+        } else if (refeicaoStatus && refeicaoStatus.startsWith('ACAO_')) {
             refeicaoHtml = `<button class="btn btn-success btn-sm btn-refeicao" data-matricula="${emp.matricula}">Solicitar Refeição</button>`;
         } else {
-            refeicaoHtml = `<span class="text-white">${emp.refeicaoStatus}</span>`;
+            refeicaoHtml = `<span class="text-warning">${emp.refeicaoStatus}</span>`;
         }
         
         let fimJornadaHtml = '--:--';
@@ -305,24 +305,25 @@ function verificarEstadoLocal() {
         try {
             const empregado = JSON.parse(empregadoArmazenadoJSON);
 
-            if (empregado.supervisao === supervisaoAtual && empregado.local === localAtual) {
-                // Se o container de prontidão existe (ou seja, apresentação NÃO está pendente)
-                if (document.getElementById('prontidao-dinamica-container')) {
-                    habilitarProntidao(empregado.matricula, empregado.horarioApresentacao);
-                }
-
-                const containerLanche = document.querySelector('.cronometro-lanche');
-                if (containerLanche) {
-                    iniciarCronometro(containerLanche, containerLanche.dataset.starttime, 15);
-                }
-
-                const containerRefeicao = document.getElementById('.cronometro-refeicao');
-                if (containerRefeicao) {
-                    iniciarCronometro(containerRefeicao, containerRefeicao.dataset.starttime, 60);
-                }
-            } else {
-                // Empregado está em outro terminal/página, limpa o storage
+            if (empregado.supervisao !== supervisaoAtual || empregado.local !== localAtual) {
                 localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
+                return;
+            }
+
+            // Se o container de prontidão existe (ou seja, apresentação NÃO está pendente)
+            if (document.getElementById('prontidao-dinamica-container')) {
+                habilitarProntidao(empregado.matricula, empregado.horarioApresentacao);
+            }
+
+            const containerLanche = document.querySelector('.cronometro-lanche');
+            if (containerLanche) {
+                
+                iniciarCronometro(containerLanche, containerLanche.dataset.starttime, 15);
+            }
+
+            const containerRefeicao = document.querySelector('.cronometro-refeicao');
+            if (containerRefeicao) {
+                iniciarCronometro(containerRefeicao, containerRefeicao.dataset.starttime, 60);
             }
         } catch (error) {
             console.error("Erro ao ler localStorage: ", error);
@@ -622,7 +623,7 @@ async function aoEnviarLanche(botao, matricula) {
     const formData = new URLSearchParams();
     formData.append('matricula', matricula);
 
-    const result = api.postLanche(formData);
+    const result = await api.postLanche(formData);
 
     if (result.success) {
         const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
@@ -686,6 +687,17 @@ async function aoEnviarFimJornada(evento) {
         botaoNormal.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Encerrando...';
     } else if (botaoJustificativa) {
         botaoJustificativa.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+
+    const enviar = dadosForm.get('justificativa');
+    if (!enviar || enviar.trim() === '') {
+        const confirmar = confirm('Tem certeza que deseja encerrar sua Jornada?');
+        if (!confirmar) {
+            if (botaoNormal) botaoNormal.disabled = false;
+            if (botaoJustificativa) botaoJustificativa.disabled = false;
+            if (select) select.disabled = false;
+            return;
+        }
     }
 
     const result = await api.postFimJornada(dadosForm);
