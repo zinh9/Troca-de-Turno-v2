@@ -33,8 +33,8 @@ function buildJSONTabela(rs)
             if count > 0 then str = str & ","
 
             dim lancheStatus, refeicaoStatus
-            lancheStatus = GetLancheStatus(rs("turno"), rs("lanche"), rs("refeicao"), rs("totalNoLocal"), rs("lancheManhaCount"), rs("metadeTurma"), rs("intervaloLanche"))
-            refeicaoStatus = GetRefeicaoStatus(rs("turno"), rs("lanche"), rs("refeicao"), rs("totalNoLocal"), rs("lancheManhaCount"), rs("metadeTurma"))
+            lancheStatus = GetLancheStatus(rs("turno"), rs("lanche"), rs("refeicao"), rs("totalNoLocal"), rs("lancheManhaCount"), rs("metadeTurma"), rs("intervaloLanche"), rs("lancheEscolhaCedoCount"))
+            refeicaoStatus = GetRefeicaoStatus(rs("turno"), rs("lanche"), rs("refeicao"), rs("totalNoLocal"), rs("lancheManhaCount"), rs("metadeTurma"), rs("intervaloLanche"))
 
             str = str & "{"
             str = str & " ""matricula"":""" & EscapeJSON(rs("matricula")) & ""","
@@ -68,8 +68,8 @@ function buildJSONTabela(rs)
     buildJSONTabela = str
 end function
 
-function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount, metadeTurma, intervaloLanche)
-    if not isnull(lanche) then
+function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount, metadeTurma, intervaloLanche, lancheEscolhaCedoCount)
+    if not isnull(lanche) or lanche <> "" then
         GetLancheStatus = "TIMER_LANCHE." & FormatISOData(lanche)
         exit function
     end if
@@ -80,52 +80,79 @@ function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount
 
     select case turno
         case "05x17", "06x18"
-            if (intervaloLanche = "" or isnull(intervaloLanche)) and lancheManhaCount < metadeTurma and agora <= timeserial(14, 30, 0) then ' ALTERAR PARA 10:30
-                GetLancheStatus = "HABILITAR_ESCOLHA"
-            elseif (intervaloLanche = "" or isnull(intervaloLanche)) and lancheManhaCount < metadeTurma and agora > timeserial(14, 30, 0) then ' ALTERAR PARA 10:30
-                if agora <= timeserial(14, 0, 0) then
-                    GetLancheStatus = "14:00 ás 16:30"
-                elseif agora <= timeserial(16, 30, 0) then
-                    GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 ás 16:30"
+            if (isnull(intervaloLanche) or intervaloLanche = "") and agora <= timeserial(10, 30, 0) then
+                if lancheEscolhaCedoCount < metadeTurma then
+                    GetLancheStatus = "HABILITAR_ESCOLHA"
                 else
-                    GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+                    GetLancheStatus = "14:00 às 16:30"
                 end if
-            else
-                if intervaloLanche = "CEDO" then
-                    if agora <= timeserial(8, 0, 0) then
-                        GetLancheStatus = "08:00 ás 10:30"
-                    elseif agora <= timeserial(10, 30, 0) then
-                        GetLancheStatus = "ACAO_LANCHE_MANHA-08:00 ás 10:30"
-                    else
-                        GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
-                    end if
-                elseif intervaloLanche = "TARDE" or intervaloLanche = "" then
-                    if agora <= timeserial(14, 0, 0) then
-                        GetLancheStatus = "14:00 ás 16:30"
-                    elseif agora <= timeserial(16, 30, 0) then
-                        GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 ás 16:30"
-                    else
-                        GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
-                    end if
+            elseif (isnull(intervaloLanche) or intervaloLanche = "") and agora > timeserial(10, 30, 0) then
+                if agora <= timeserial(14, 0, 0) then
+                    GetLancheStatus = "14:00 às 16:30"
+                elseif agora <= timeserial(16, 30, 0) then
+                    GetLancheStatus = "ACAO_LANCHE_TARDE"
+                end if
+            elseif intervaloLanche = "CEDO" then
+                if agora <= timeserial(8, 0, 0) then
+                    GetLancheStatus = "08:00 às 10:30"
+                elseif agora <= timeserial(10, 30, 0) then
+                    GetLancheStatus = "ACAO_LANCHE_CEDO"
+                end if
+            elseif intervaloLanche = "TARDE" then
+                if agora <= timeserial(14, 0, 0) then
+                    GetLancheStatus = "14:00 às 16:30"
+                elseif agora <= timeserial(16, 30, 0) then
+                    GetLancheStatus = "ACAO_LANCHE_TARDE"
                 end if
             end if
+
+
+            ' if (intervaloLanche = "" or isnull(intervaloLanche)) and lancheManhaCount < metadeTurma and agora <= timeserial(14, 30, 0) then ' ALTERAR PARA 10:30
+            '     GetLancheStatus = "HABILITAR_ESCOLHA"
+            ' elseif (intervaloLanche = "" or isnull(intervaloLanche)) and lancheManhaCount < metadeTurma and agora > timeserial(14, 30, 0) then ' ALTERAR PARA 10:30
+            '     if agora <= timeserial(14, 0, 0) then
+            '         GetLancheStatus = "14:00 às 16:30"
+            '     elseif agora <= timeserial(16, 30, 0) then
+            '         GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 às 16:30"
+            '     else
+            '         GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            '     end if
+            ' else
+            '     if intervaloLanche = "CEDO" then
+            '         if agora <= timeserial(8, 0, 0) then
+            '             GetLancheStatus = "08:00 às 10:30"
+            '         elseif agora <= timeserial(10, 30, 0) then
+            '             GetLancheStatus = "ACAO_LANCHE_MANHA-08:00 às 10:30"
+            '         else
+            '             GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            '         end if
+            '     elseif intervaloLanche = "TARDE" or intervaloLanche = "" then
+            '         if agora <= timeserial(14, 0, 0) then
+            '             GetLancheStatus = "14:00 às 16:30"
+            '         elseif agora <= timeserial(16, 30, 0) then
+            '             GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 às 16:30"
+            '         else
+            '             GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            '         end if
+            '     end if
+            ' end if
             ' if isnull(refeicao) or refeicao = "" then
             '     if lancheManhaCount < metadeTurma then
             '         if agora <= timeserial(8, 0, 0) then
-            '             GetLancheStatus = "08:00 ás 10:30"
+            '             GetLancheStatus = "08:00 às 10:30"
             '         elseif agora <= timeserial(10, 30, 0) then
-            '             GetLancheStatus = "ACAO_LANCHE_MANHA-08:00 ás 10:30"
+            '             GetLancheStatus = "ACAO_LANCHE_MANHA-08:00 às 10:30"
             '         else
-            '             GetLancheStatus = "PROXIMO-14:00 ás 16:30"
+            '             GetLancheStatus = "PROXIMO-14:00 às 16:30"
             '         end if
             '     else
-            '         GetLancheStatus = "14:00 ás 16:30"
+            '         GetLancheStatus = "14:00 às 16:30"
             '     end if
             ' elseif not isnull(refeicao) or refeicao <> "" then
             '     if agora <= timeserial(14, 0, 0) then
-            '         GetLancheStatus = "14:00 ás 16:30"
+            '         GetLancheStatus = "14:00 às 16:30"
             '     elseif agora <= timeserial(16, 30, 0) then
-            '         GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 ás 16:30"
+            '         GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 às 16:30"
             '     else
             '         GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             '     end if
@@ -134,48 +161,48 @@ function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount
             ' end if
         case "12x00"
             if agora <= timeserial(14, 0, 0) then
-                GetLancheStatus = "14:00 ás 17:00"
+                GetLancheStatus = "14:00 às 17:00"
             elseif agora <= timeserial(16, 30, 0) then
-                GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 ás 16:30"
+                GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 às 16:30"
             else
                 GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
             ' if agora > timeserial(14, 0, 0) and agora <= timeserial(16, 30, 0) then
             '     GetLancheStatus = "ACAO_LANCHE_TARDE"
             ' else
-            '     GetLancheStatus = "14:00 ás 17:00"
+            '     GetLancheStatus = "14:00 às 17:00"
             ' end if
         case "17x05"
             if agora >= timeserial(17, 0, 0) or agora <= timeserial(1, 0, 0) then
-                GetLancheStatus = "01:00 ás 03:30"
+                GetLancheStatus = "01:00 às 03:30"
             elseif agora <= timeserial(3, 30, 0) then
-                GetLancheStatus = "ACAO_LANCHE_MADRUGADA-01:00 ás 03:30"
+                GetLancheStatus = "ACAO_LANCHE_MADRUGADA-01:00 às 03:30"
             else
                 GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
             ' if agora > timeserial(1, 0, 0) and agora <= timeserial(3, 30, 0) then
             '     GetLancheStatus = "ACAO_LANCHE_MADRUGADA"
             ' else
-            '     GetLancheStatus = "01:00 ás 03:30"
+            '     GetLancheStatus = "01:00 às 03:30"
             ' end if
         case "18x06" 
-            if agora >= timeserial(18, 0, 0) or agora <= timeserial(2, 0, 0) then
-                GetLancheStatus = "02:00 ás 04:30"
+            if agora >= timeserial(17, 0, 0) or agora <= timeserial(2, 0, 0) then
+                GetLancheStatus = "02:00 às 04:30"
             elseif agora <= timeserial(4, 30, 0) then
-                GetLancheStatus = "ACAO_LANCHE_MADRUGADA-02:00 ás 04:30"
+                GetLancheStatus = "ACAO_LANCHE_MADRUGADA-02:00 às 04:30"
             else
                 GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
             ' if agora > timeserial(2, 0, 0) and agora <= timeserial(4, 30, 0) then
             '     GetLancheStatus = "ACAO_LANCHE_MADRUGADA"
             ' else
-            '     GetLancheStatus = "02:00 ás 04:30"
+            '     GetLancheStatus = "02:00 às 04:30"
             ' end if
     end select
 end function
 
-function GetRefeicaoStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount, metadeTurma)
-    if not isnull(refeicao) then
+function GetRefeicaoStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount, metadeTurma, intervaloLanche)
+    if not isnull(refeicao) or lanche <> "" then
         GetRefeicaoStatus = "TIMER_REFEICAO." & FormatISOData(refeicao)
         exit function
     end if
@@ -185,69 +212,95 @@ function GetRefeicaoStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCou
 
     select case turno
         case "05x17", "06x18"
-            if not isnull(lanche) or lanche <> "" then
+            if (not isnull(lanche) or lanche <> "") or (intervaloLanche = "CEDO") then
                 if agora <= timeserial(12, 30, 0) then
-                    GetRefeicaoStatus = "12:30 ás 14:00"
+                    GetRefeicaoStatus = "12:30 às 14:00"
                 elseif agora <= timeserial(14, 0, 0) then
-                    GetRefeicaoStatus = "ACAO_REFEICAO_TARDE-12:30 ás 14:00"
+                    GetRefeicaoStatus = "ACAO_REFEICAO_TARDE-12:30 às 14:00"
                 else
                     GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
             elseif lancheManhaCount < metadeTurma and (isnull(lanche) or lanche = "") then
                 if agora <= timeserial(10, 30, 0) then
-                    GetRefeicaoStatus = "10:30 ás 14:00"
+                    GetRefeicaoStatus = "10:30 às 14:00"
                 elseif agora <= timeserial(14, 0, 0) then
-                    GetRefeicaoStatus = "ACAO_REFEICAO-10:30 ás 14:00"
+                    GetRefeicaoStatus = "ACAO_REFEICAO-10:30 às 14:00"
                 else
                     GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
-            elseif isnull(lanche) or lanche = "" then
+            elseif (isnull(lanche) or lanche = "") or (intervaloLanche = "TARDE" or intervaloLanche = "") then
                 if agora <= timeserial(10, 30, 0) then
-                    GetRefeicaoStatus = "10:30 ás 12:30"
+                    GetRefeicaoStatus = "10:30 às 12:30"
                 elseif agora <= timeserial(12, 30, 0) then
-                    GetRefeicaoStatus = "ACAO_REFEICAO_CEDO-10:30 ás 12:30"
+                    GetRefeicaoStatus = "ACAO_REFEICAO_CEDO-10:30 às 12:30"
+                else
+                    GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
-            else
-                GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
+
+            ' if not isnull(lanche) or lanche <> "" then
+            '     if agora <= timeserial(12, 30, 0) then
+            '         GetRefeicaoStatus = "12:30 às 14:00"
+            '     elseif agora <= timeserial(14, 0, 0) then
+            '         GetRefeicaoStatus = "ACAO_REFEICAO_TARDE-12:30 às 14:00"
+            '     else
+            '         GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            '     end if
+            ' elseif lancheManhaCount < metadeTurma and (isnull(lanche) or lanche = "") then
+            '     if agora <= timeserial(10, 30, 0) then
+            '         GetRefeicaoStatus = "10:30 às 14:00"
+            '     elseif agora <= timeserial(14, 0, 0) then
+            '         GetRefeicaoStatus = "ACAO_REFEICAO-10:30 às 14:00"
+            '     else
+            '         GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            '     end if
+            ' elseif isnull(lanche) or lanche = "" then
+            '     if agora <= timeserial(10, 30, 0) then
+            '         GetRefeicaoStatus = "10:30 às 12:30"
+            '     elseif agora <= timeserial(12, 30, 0) then
+            '         GetRefeicaoStatus = "ACAO_REFEICAO_CEDO-10:30 às 12:30"
+            '     end if
+            ' else
+            '     GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            ' end if
         case "12x00"
             if agora <= timeserial(19, 0, 0) then
-                GetRefeicaoStatus = "19:00 ás 21:00"
+                GetRefeicaoStatus = "19:00 às 21:00"
             elseif agora <= timeserial(21, 0, 0) then
-                GetRefeicaoStatus = "ACAO_REFEICAO_NOITE_12x00-19:00 ás 21:00"
+                GetRefeicaoStatus = "ACAO_REFEICAO_NOITE_12x00-19:00 às 21:00"
             else
                 GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
             ' if agora > timeserial(19, 0, 0) and agora <= timeserial(21, 0, 0) then
             '     GetRefeicaoStatus = "ACAO_REFEICAO_NOITE"
             ' else
-            '     GetRefeicaoStatus = "19:00 ás 21:00"
+            '     GetRefeicaoStatus = "19:00 às 21:00"
             ' end if
         case "17x05"
             if agora <= timeserial(20, 0, 0) then
-                GetRefeicaoStatus = "20:00 ás 23:30"
+                GetRefeicaoStatus = "20:00 às 23:30"
             elseif agora <= timeserial(23, 30, 0) then
-                GetRefeicaoStatus = "ACAO_REFEICAO_NOITE_17x05-20:00 ás 23:30"
+                GetRefeicaoStatus = "ACAO_REFEICAO_NOITE_17x05-20:00 às 23:30"
             else
                 GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
             ' if agora > timeserial(20, 0, 0) and agora <= timeserial(23, 30, 0) then
             '     GetRefeicaoStatus = "ACAO_REFEICAO_NOITE"
             ' else
-            '     GetRefeicaoStatus = "20:00 ás 23:30"
+            '     GetRefeicaoStatus = "20:00 às 23:30"
             ' end if
         case "18x06"
-            if agora >= TimeSerial(18, 0, 0) and agora <= timeserial(21, 0, 0) then
-                GetRefeicaoStatus = "21:00 ás 00:30"
-            elseif agora >= TimeSerial(18, 0, 0) and agora <= timeserial(23, 59, 59) or agora <= timeserial(0, 30, 0) then
-                GetRefeicaoStatus = "ACAO_REFEICAO_NOITE_18x06-21:00 ás 00:30"
+            if agora >= TimeSerial(17, 0, 0) and agora <= timeserial(21, 0, 0) then
+                GetRefeicaoStatus = "21:00 às 00:30"
+            elseif agora >= TimeSerial(17, 0, 0) and agora <= timeserial(23, 59, 59) or agora <= timeserial(0, 30, 0) then
+                GetRefeicaoStatus = "ACAO_REFEICAO_NOITE_18x06-21:00 às 00:30"
             else
                 GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
             ' if agora > timeserial(21, 0, 0) and (agora <= timeserial(23, 59, 59) or agora <= timeserial(0, 30, 0)) then
             '     GetRefeicaoStatus = "ACAO_REFEICAO_NOITE"
             ' else
-            '     GetRefeicaoStatus = "21:00 ás 00:30"
+            '     GetRefeicaoStatus = "21:00 às 00:30"
             ' end if
     end select
 end function
