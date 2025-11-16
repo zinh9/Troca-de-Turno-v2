@@ -51,7 +51,8 @@ dim sqlCounts
 sqlCounts = "SELECT " & _
     "  ra_inner.local_trabalho_ra, " & _
     "  COUNT(*) AS totalNoLocal, " & _
-    "  SUM(IIF(ra_inner.data_hora_lanche_patio IS NOT NULL AND Hour(ra_inner.data_hora_lanche_patio) < 12, 1, 0)) AS lancheManhaCount " & _
+    "  SUM(IIF(ra_inner.data_hora_lanche_patio IS NOT NULL AND Hour(ra_inner.data_hora_lanche_patio) < 12, 1, 0)) AS lancheManhaCount, " & _
+    "  SUM(IIF(ra_inner.escolha_lanche_intervalo = 'CEDO', 1, 0)) AS lancheEscolhaCedoCount " & _
     "FROM registros_apresentacao AS ra_inner " & _
     "WHERE DateValue(ra_inner.data_hora_apresentacao) >= Date() - 1 " & _
     "  AND Now() <= DateAdd('n', 870, ra_inner.data_hora_apresentacao) "
@@ -86,6 +87,7 @@ sqlTabela = _
 "  IIF(ld.JOB_DESC='OFICIAL OPERACAO FERROVIARIA' OR ld.JOB_DESC='OFICIAL OP FERROV FORM PROFIS', 'OOF', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV ESP', 'INSPETOR ESP', IIF(ld.JOB_DESC='MAQUINISTA PATIO' OR ld.JOB_DESC='MAQUINISTA', 'MAQ', IIF(ld.JOB_DESC='TECNICO OPERACAO FERROVIARIA', 'TOF', IIF(ld.JOB_DESC='TRAINEE OPERACIONAL', 'TRAINEE', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV I', 'INSPETOR I', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV II', 'INSPETOR II', IIF(ld.JOB_DESC='OPERADOR LOCOMOTIVA REMOTO I', 'MAQ REMOTO I', IIF(ld.JOB_DESC='OPERADOR LOCOMOTIVA REMOTO II', 'MAQ REMOTO II', IIF(ld.JOB_DESC='TECNICO OPERACAO', 'TO', ld.JOB_DESC)))))))))) AS cargo, " & _
 "  Counts.totalNoLocal, " & _
 "  Counts.lancheManhaCount, " & _
+"  Counts.lancheEscolhaCedoCount, " & _
 "  CInt(IIF(Counts.totalNoLocal Mod 2 = 0, Counts.totalNoLocal / 2, (Counts.totalNoLocal - 1) / 2 + 1)) AS metadeTurma " & _
 "FROM (registros_apresentacao AS ra " & _
 "LEFT JOIN login_dss AS ld ON ra.usuario_dss = ld.usuario_dss) " & _
@@ -105,7 +107,7 @@ End If
 ' Concatenar com o SQL para trazer o registro mais recente
 sqlTabela = sqlTabela & "ORDER BY ra.data_hora_apresentacao DESC;"
 
-' response.write sqlTabela & "<br>"
+'response.write sqlTabela
 
 set rsTabela = conn.execute(sqlTabela)
 
