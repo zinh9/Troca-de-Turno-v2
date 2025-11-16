@@ -10,17 +10,18 @@ response.cachecontrol = "no-cache"
 response.addheader "Pragma", "no-cache"
 response.expires = -1
 
-dim matricula
-dim conn, sql, rs, success, message
+dim matricula, conn, sql, rs, success, message, code, horarioAgora
 
-' matricula = request.form("matricula")
+matricula = request.form("matricula")
 
-matricula = "01106146"
+' matricula = "01106146"
 
 success = "false"
 message = ""
+code = "ERROR"
+horarioAgora = now()
 
-on error resume next
+on error resume next 
 
 sql = "UPDATE registros_apresentacao SET " & _
 "data_hora_refeicao_patio = Now() " & _
@@ -33,11 +34,11 @@ set conn = getConexao()
 conn.execute(sql)
 
 if err.number <> 0 then
-    success = "false"
     message = "Erro ao registrar Refeição!"
 else
     success = "true"
     message = "Refeição registrada com sucesso!"
+    code = "SUCCESS"
 end if
 
 on error goto 0
@@ -45,7 +46,6 @@ on error goto 0
 conn.close
 set conn = nothing
 
-response.write "{""success"":" & lcase(success) & ",""message"":""" & message & """}"
-response.end
+ResponseWriteJSON success, code, message, horarioAgora, ""
 
 %>
