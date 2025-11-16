@@ -5,7 +5,7 @@ let supervisaoAtual = null;
 let localAtual = null;
 let intervaloTimerProntidao = null;
 let intervaloPollingTabela = null;
-const CHAVE_ARMAZENAMENTO_LOCAL = 'empregadoAtivoLocal';
+let empregadoAtivoLocal = null;
 
 // --- PONTO DE ENTRADA ---
 
@@ -124,31 +124,6 @@ async function carregarEMontarTabela() {
             title="TEMPO REFERENCIAL: 0${dados.info.horarioReferencia}"></i> Apresentação
         `; // Formatar o horário referêncial CORRETAMENTE
 
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregadoLocal = JSON.parse(empregadoArmazenadoJSON);
-            const empNoBanco = dados.empregados.find(e => String(e.matricula === String(empregadoLocal.matricula)));
-
-            if (empNoBanco) {
-                let mudou = false;
-                if (empNoBanco.prontidao && !empregadoLocal.statusProntidao) {
-                    empregadoLocal.statusProntidao = 'Pronto';
-                    mudou = true;
-                }
-                if (empNoBanco.lancheStatus.startsWith('TIMER_') && empregadoLocal.lancheStatus !== empNoBanco.lancheStatus) {
-                    empregadoLocal.lancheStatus = empNoBanco.lancheStatus;
-                    mudou = true;
-                }
-                if (empNoBanco.refeicaoStatus.startsWith('TIMER_') && empregadoLocal.refeicaoStatus !== empNoBanco.refeicaoStatus) {
-                    empregadoLocal.refeicaoStatus = empNoBanco.refeicaoStatus;
-                    mudou = true;
-                }
-                if (mudou) {
-                    localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregadoLocal));
-                }
-            }
-        }
-        
         montarLinhasTabela(dados.empregados, dados.info.horarioReferencia);
 
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -156,7 +131,6 @@ async function carregarEMontarTabela() {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
 
-        verificarEstadoLocal();
     } else {
         document.getElementById('tabelaApresentacoes').innerHTML = `
             <tr><td colspan="6" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
@@ -170,8 +144,7 @@ function montarLinhasTabela(empregados, horarioReferencia) {
     tbody.className = "fs-5 fw-bold text-center";
 
     const fragmento = document.createDocumentFragment();
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    const empregadoArmazenado = empregadoArmazenadoJSON ? JSON.parse(empregadoArmazenadoJSON) : null;
+    const empregadoArmazenado = empregadoAtivoLocal;
 
     if (!empregados || empregados.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Nenhuma apresentação registrada</td></tr>';
@@ -254,6 +227,7 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         fragmento.appendChild(linha);
     });
     tbody.appendChild(fragmento);
+    verificarEstadoLocal();
 }
 
 function renderizarFormJustificativaApresentacao(matricula) {
@@ -344,41 +318,34 @@ function renderizarEscolhaLanche(matricula) {
 // --- LÓGICA DE ESTADO (TIMERS E LOCALSTORAGE) ---
 
 function verificarEstadoLocal() {
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    if (empregadoArmazenadoJSON) {
+    console.log('Estou aqui');
+    if (empregadoAtivoLocal) {
         try {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
+            const { matricula, horarioApresentacao, supervisao, local } = empregadoAtivoLocal;
 
-            if (empregado.supervisao !== supervisaoAtual || empregado.local !== localAtual) {
-                localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
-                return;
-            }
-            
-            const containerProntidao = document.getElementById(`prontidao-dinamica-container-${empregado.matricula}`);
-            if (containerProntidao) {
-                habilitarProntidao(containerProntidao, empregado.matricula, empregado.horarioApresentacao);
-            }
-
-            const containerLanche = document.getElementById(`cronometro-lanche-${empregado.matricula}`);
-            if (containerLanche) {
-                iniciarCronometro(containerLanche, containerLanche.dataset.starttime, 15);
-            }
-
-            const containerRefeicao = document.getElementById(`cronometro-refeicao-${empregado.matricula}`);
-            if (containerRefeicao) {
-                iniciarCronometro(containerRefeicao, containerRefeicao.dataset.starttime, 60);
+            if (supervisao == supervisaoAtual && local === localAtual) {
+                const containerProntidao = document.getElementById(`prontidao-dinamica-container-${matricula}`);
+                if (containerProntidao) {
+                    habilitarProntidao(containerProntidao, matricula, horarioApresentacao);
+                }
+            } else {
+                empregadoAtivoLocal = null;
+                habilitarApresentacao();
             }
         } catch (error) {
-            console.error("Erro ao ler localStorage: ", error);
-            localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
+            console.error('Erro ao verificar estado loca: ', error);
+            empregadoAtivoLocal = null;
+            habilitarApresentacao();
         }
+    } else {
+        habilitarApresentacao();
     }
 }
 
 function habilitarProntidao(containerAcoes, matricula, horarioApresentacao) {
     if (!containerAcoes) return;
     if (containerAcoes.innerHTML.includes('formProntidao')) return;
-
+    
     const horaInicio = new Date(horarioApresentacao);
     if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
 
@@ -449,12 +416,11 @@ function habilitarProntidao(containerAcoes, matricula, horarioApresentacao) {
 
 function limparProntidao() {
     if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    if (empregadoArmazenadoJSON) {
-        const empregado = JSON.parse(empregadoArmazenadoJSON);
-        empregado.statusProntidao = 'Pronto';
-        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+
+    if (empregadoAtivoLocal) {
+        empregadoAtivoLocal.statusProntidao = 'Pronto';
     }
+    
     carregarEMontarTabela();
 }
 
@@ -538,7 +504,7 @@ async function processarRespostaApresentacao(result, formData) {
             local: localAtual,
             statusApresentacao: result.status, // (Salva "OK" ou "JUSTIFICAR")
         };
-        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(dadosEmpregado));
+        empregadoAtivoLocal = dadosEmpregado;
 
         document.getElementById("matricula").value = '';
         msgContainer.innerHTML = `<span class="text-success">${result.message || 'Apresentação registrada!'}</span>`;
@@ -610,12 +576,8 @@ async function aoEnviarJustificativaApresentacao(evento) {
  * Helper: Atualiza o localStorage após justificar o atraso
  */
 function aoJustificativaApresentacaoOK() {
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    if (empregadoArmazenadoJSON) {
-        const empregado = JSON.parse(empregadoArmazenadoJSON);
-
-        empregado.statusApresentacao = 'JUSTIFICATIVA_OK';
-        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+    if (empregadoAtivoLocal) {
+        empregadoAtivoLocal.statusApresentacao = 'JUSTIFICATIVA_OK';
     }
     carregarEMontarTabela();
 }
@@ -671,13 +633,9 @@ async function aoEnviarLanche(botao, matricula) {
     const result = await api.postLanche(formData);
 
     if (result.success) {
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-            if (String(empregado.matricula === String(matricula))) {
-                empregado.lancheStatus = "TIMER_LANCHE." + result.horarioApresentacao;
-                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
-            }
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(matricula)) {
+            empregadoAtivoLocal.lancheStatus = "TIMER_LANCHE." + result.horarioApresentacao;
+            console.log('Lanche salvo no estado local: ', empregadoAtivoLocal);
         }
         await carregarEMontarTabela();
     } else {
@@ -699,19 +657,14 @@ async function aoEnviarEscolhaIntervalo(botao, select, matricula) {
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     const formData = new URLSearchParams();
-    formData.append('matriucla', matricula);
+    formData.append('matricula', matricula);
     formData.append('escolhaIntervalo', valor);
 
     const result = api.postEscolhaIntervalo(formData);
 
     if (result.success) {
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-            if (String(empregado.matricula === String(matricula))) {
-                empregado.lancheStatus = (valor === 'CEDO') ? "08:00 às 10:30" : "14:00 às 16:30";
-                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
-            }
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(matricula)) {
+            empregadoAtivoLocal.lancheStatus = (valor === 'CEDO') ? "08:00 às 10:30" : "14:00 às 16:30";
         }
         await carregarEMontarTabela();
     } else {
@@ -732,13 +685,9 @@ async function aoEnviarRefeicao(botao, matricula) {
     const result = await api.postRefeicao(formData);
 
     if (result.success) {
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-            if (String(empregado.matricula === String(matricula))) {
-                empregado.refeicaoStatus = "TIMER_REFEICAO." + result.horarioApresentacao;
-                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
-            }
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(matricula)) {
+            empregadoAtivoLocal.refeicaoStatus = "TIMER_REFEICAO." + result.horarioApresentacao;
+            console.log('Refeição salvo no estado local: ', empregadoAtivoLocal);
         }
         await carregarEMontarTabela();
     } else {
@@ -783,12 +732,9 @@ async function aoEnviarFimJornada(evento) {
     const result = await api.postFimJornada(dadosForm);
 
     if (result.success === true) {
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-            if (String(empregado.matricula) === String(dadosForm.get('matricula'))) {
-                localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
-            }
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(matricula)) {
+            empregadoAtivoLocal = null;
+            console.log("Sessão local encerrada.")
         }
         await carregarEMontarTabela();
     } else {
