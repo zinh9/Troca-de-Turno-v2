@@ -4,7 +4,7 @@ export function horaParaMinutos(horaStr) {
     return (h || 0) * 60 + (m || 0);
 }
 
-export function iniciarRelogio() {
+export function iniciarRelogio(iniciarMasterTick = false) {
     setInterval(() => {
         const d = new Date();
         let displayDate;
@@ -18,6 +18,14 @@ export function iniciarRelogio() {
             clockEl.innerHTML = displayDate;
         }
     }, 1000);
+
+    if (iniciarMasterTick) {
+        setInterval(() => {
+            if (window.viewLocal && typeof window.viewLocal.atualizarTimers === 'function') {
+                window.viewLocal.atualizarTimers();
+            }
+        }, 1000);
+    }
 }
 
 /**
@@ -28,7 +36,7 @@ export function iniciarRelogio() {
 export function iniciarCronometro(elemento, isoStartTime, duracaoMinutos) {
     const horaInicio = new Date(isoStartTime);
     const horaFim = new Date(horaInicio.getTime() + duracaoMinutos * 60000);
-    
+    console.log('Cheguei aqui');
 
     const intervalo = setInterval(() => {
         const agora = new Date();
