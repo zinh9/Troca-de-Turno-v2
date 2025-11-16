@@ -10,39 +10,33 @@ response.cachecontrol = "no-cache"
 response.addheader "Pragma", "no-cache"
 response.expires = -1
 
-dim matricula
-dim conn, sql, rs, success, message
+dim matricula, conn, sql, rs, success, message, code
 
 matricula = request.form("matricula")
-intervalo = request.form("escolhaIntervalo")
 
 ' matricula = "81053394"
 ' justificativa = null
 
 success = "false"
 message = ""
+code = "ERROR"
 
 on error resume next
-
-if matricula = "" or isnull(matricula) then
-    message = "Matrícula nula ou vazia."
-end if
+set conn = getConexao()
 
 sql = "UPDATE registros_apresentacao SET " & _
-"escolha_lanche_intervalo = '" & intervalo & "' " & _
+"data_hora_lanche_patio_CPT = Now() " & _
 "WHERE usuario_dss = '" & matricula & "' " & _
-"AND fim_jornada IS NULL " & _
 "AND (DateValue(data_hora_apresentacao) = Date() OR DateValue(data_hora_apresentacao) = Date() - 1)"
-
-set conn = getConexao()
 
 conn.execute(sql)
 
 if err.number <> 0 then
-    message = "Erro ao registrar Escolha!"
+    message = "Erro ao Liberar Lanche (CPT)!"
 else
     success = "true"
-    message = "Escolha registrada com sucesso!"
+    message = "Liberação de Lanche registrada com sucesso!"
+    code = "SUCCESS"
 end if
 
 on error goto 0
@@ -50,7 +44,6 @@ on error goto 0
 conn.close
 set conn = nothing
 
-response.write "{""success"":" & lcase(success) & ",""message"":""" & message & """}"
-response.end
+ResponseWriteJSON success, code, message, "", ""
 
 %>
