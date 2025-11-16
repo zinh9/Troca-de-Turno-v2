@@ -5,39 +5,49 @@ import { horaParaMinutos, iniciarRelogio, iniciarCronometro } from '../utils/hel
 // --- ESTADO GLOBAL DO MÓDULO ---
 let supervisaoAtual = null;
 let localAtual = null;
-let intervaloTimerProntidao = null;
+// let intervaloTimerProntidao = null; // REMOVIDO (Bug Crítico)
 let intervaloPollingTabela = null;
-const CHAVE_ARMAZENAMENTO_LOCAL = 'empregadoAtivoLocal';
+// const CHAVE_ARMAZENAMENTO_LOCAL = 'empregadoAtivoLocal'; // REMOVIDO (Bug Crítico)
+// let empregadoAtivoLocal = null; // REMOVIDO (Bug Crítico)
 
 // --- PONTO DE ENTRADA ---
+
 export const viewLocal = {
-    init: init
+    init: init,
+    // [NOVO] Expõe a função de 'tick' para o 'helpers.js'
+    atualizarTodosOsTimers: atualizarTodosOsTimers 
 };
 
 async function init(supervisao, local) {
     supervisaoAtual = supervisao;
     localAtual = local;
 
+    // [CORREÇÃO] Coloca o objeto 'viewLocal' no 'window' para que
+    // o 'iniciarRelogio' (que não é um módulo) possa chamá-lo.
+    window.viewLocal = viewLocal;
+
     montarLayout();
     habilitarApresentacao();
     
     // Vincula listeners delegados da tabela (só roda 1 vez)
-    vincularListenersDeTabela(); 
+    listenersDinamicos(); 
     
     await carregarEMontarTabela(); // Carga inicial
     
     if (intervaloPollingTabela) clearInterval(intervaloPollingTabela);
     intervaloPollingTabela = setInterval(() => carregarEMontarTabela(), 40000);
 
-    iniciarRelogio();
+    // [CORREÇÃO] Inicia o relógio E o "Master Tick"
+    iniciarRelogio(true); 
 }
 
 // --- RENDERIZAÇÃO DA UI PRINCIPAL ---
 
 function montarLayout() {
+    // ... (Seu 'montarLayout' está OK) ...
+    //
     const headerContainer = document.getElementById('page-header');
     const contentContainer = document.getElementById('page-content');
-    
     headerContainer.innerHTML = `
         <div class="col-12 d-flex align-items-center">
             <h5 class="card-title h1 text-white mt-1" id="local-title">Carregando...</h5>
@@ -46,13 +56,11 @@ function montarLayout() {
             </div>
         </div>
     `;
-
-    // [CORRIGIDO] Colunas corretas (6)
     contentContainer.innerHTML = `
         <table class="table table-hover table-striped table-dark table-sm border-rounded">
             <thead class="table-light text-center fs-4 fw-bold">
                 <tr>
-                    <th><span><i class="fa fa-user" aria-hidden="true"></i> Nome</span></th>
+                    <th>Nome</th>
                     <th><span id="th-apresentacao">Apresentação</span></th>
                     <th><span><i class="fas fa-clock"></i> Prontidão</span></th>
                     <th><span><i class="fas fa-burger"></i> Lanche</span></th>
@@ -68,8 +76,9 @@ function montarLayout() {
 }
 
 function habilitarApresentacao() {
+    // ... (Seu 'habilitarApresentacao' está OK) ...
+    //
     const actionsContainer = document.getElementById('page-actions');
-    // ... (HTML do seu formulário de apresentação está OK) ...
     actionsContainer.innerHTML = `
         <div class="row">
             <div class="col-md-auto">
@@ -103,7 +112,6 @@ function habilitarApresentacao() {
             </div>
         </div>
     `;
-    
     const formInserir = document.getElementById('formInserir');
     if (formInserir) {
         formInserir.addEventListener('submit', aoEnviarApresentacao);
@@ -132,15 +140,17 @@ async function carregarEMontarTabela() {
             title="TEMPO REFERENCIAL: ${dados.info.horarioReferencia}"></i> Apresentação
         `;
         
+        // [REMOVIDO] Bloco de sincronização do localStorage
+        
         montarLinhasTabela(dados.empregados, dados.info.horarioReferencia);
 
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
-        
-        // Inicia os timers (se houver)
-        verificarEstadoLocal();
+
+        // [REMOVIDO] Chamadas 'habilitarJustificativa' e 'verificarEstadoLocal'
+        // Elas agora são tratadas pelo 'listenersDinamicos' e 'atualizarTodosOsTimers'
     } else {
         document.getElementById('tabelaApresentacoes').innerHTML = `
             <tr><td colspan="6" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
@@ -154,8 +164,9 @@ function montarLinhasTabela(empregados, horarioReferencia) {
     tbody.className = "fs-5 fw-bold text-center";
 
     const fragmento = document.createDocumentFragment();
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    const empregadoArmazenado = empregadoArmazenadoJSON ? JSON.parse(empregadoArmazenadoJSON) : null;
+
+    // [REMOVIDO] Não lemos mais o localStorage aqui
+    // const empregadoArmazenado = null; 
 
     if (!empregados || empregados.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Nenhuma apresentação registrada</td></tr>';
@@ -163,24 +174,13 @@ function montarLinhasTabela(empregados, horarioReferencia) {
     }
 
     empregados.forEach(emp => {
-        const empregadoAtivo = empregadoArmazenado && String(emp.matricula) === String(empregadoArmazenado.matricula);
-        
-        const statusApresentacao = (empregadoAtivo && empregadoArmazenado.statusApresentacao) 
-            ? empregadoArmazenado.statusApresentacao 
-            : emp.statusApresentacao;
-        
-        // [CORREÇÃO] Pega o status do lanche/refeição do localStorage (se ativo) ou do banco
-        const lancheStatus = (empregadoAtivo && empregadoArmazenado.lancheStatus) 
-            ? empregadoArmazenado.lancheStatus 
-            : emp.lancheStatus;
-            
-        const refeicaoStatus = (empregadoAtivo && empregadoArmazenado.refeicaoStatus) 
-            ? empregadoArmazenado.refeicaoStatus 
-            : emp.refeicaoStatus;
+        // [REMOVIDO] Não depende mais do 'empregadoAtivo'
+        const statusApresentacao = emp.statusApresentacao;
+        const lancheStatus = emp.lancheStatus;
+        const refeicaoStatus = emp.refeicaoStatus;
 
         // --- 1. APRESENTAÇÃO ---
         let apresentacaoHtml = '';
-        // [CORREÇÃO] A lógica do 'else' (fallback) estava atribuindo a uma 'const'
         if (statusApresentacao === 'OK') {
             apresentacaoHtml =`<span class="text-white">${emp.apresentacao}</span>`;
         } else if (statusApresentacao === 'JUSTIFICATIVA_OK') {
@@ -190,6 +190,7 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         } else {
             const horaApresentacao = horaParaMinutos(emp.apresentacao);
             const horaReferencia = horaParaMinutos(horarioReferencia);
+            // [CORREÇÃO] Bug de 'const' dentro do 'else'
             apresentacaoHtml = (horaApresentacao <= horaReferencia || !emp.justificativaApresentacao)
             ? `<span class="text-white">${emp.apresentacao}</span>`
             : `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
@@ -198,10 +199,15 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         // --- 2. PRONTIDÃO ---
         let prontidaoHtml = 'Aguardando...';
         // [CORREÇÃO] Lógica de prontidão não deve rodar se estiver justificando
-        if (empregadoAtivo && !emp.prontidao && statusApresentacao !== 'JUSTIFICAR') {
-            prontidaoHtml = '<div id="prontidao-dinamica-container"></div>'; // Placeholder do Timer
+        if (!emp.prontidao && statusApresentacao !== 'JUSTIFICAR') {
+            // [CORREÇÃO] Adiciona a classe e os data-attributes para o "Master Tick"
+            prontidaoHtml = `<div class="prontidao-dinamica-container" 
+                                  data-matricula="${emp.matricula}" 
+                                  data-horario-apresentacao="${emp.dataHoraApresentacaoCompleta}">
+                                  Aguardando...
+                             </div>`;
         } else if (emp.statusProntidao === 'Pronto com atraso') {
-            prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`;
+            prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`
         } else if (emp.statusProntidao === 'Pronto') {
             prontidaoHtml = `<span class="text-success">${emp.prontidao}</span>`;
         }
@@ -211,13 +217,15 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         if (emp.prontidao) { // Só mostra lanche se estiver pronto
             if (lancheStatus && lancheStatus.startsWith('TIMER_LANCHE:')) {
                 lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split(':')[1]}"></div>`;
+            } else if (lancheStatus === 'HABILITAR_ESCOLHA') {
+                lancheHtml = renderizarEscolhaLanche(emp.matricula);
             } else if (lancheStatus && lancheStatus.startsWith('ACAO_')) {
                 lancheHtml = `<button class="btn btn-sm btn-info btn-lanche" data-matricula="${emp.matricula}">Lanche</button>`;
             } else {
-                lancheHtml = `<span class="text-muted">${lancheStatus}</span>`; // "08:00 às 10:30", "Não Solicitado", etc.
+                lancheHtml = `<span class="text-muted">${lancheStatus}</span>`;
             }
         }
-
+        
         // --- 4. REFEIÇÃO ---
         let refeicaoHtml = '--:--';
         if (emp.prontidao) {
@@ -229,14 +237,14 @@ function montarLinhasTabela(empregados, horarioReferencia) {
                 refeicaoHtml = `<span class="text-muted">${refeicaoStatus}</span>`;
             }
         }
-
+        
         // --- 5. FIM DE JORNADA ---
         let fimJornadaHtml = '--:--';
         if (emp.fimJornada) {
             fimJornadaHtml = emp.justificativaFimJornada
                 ? `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaFimJornada}">${emp.fimJornada}</span>`
                 : `<span class="text-success">${emp.fimJornada}</span>`;
-        } else if (emp.prontidao && statusApresentacao !== 'JUSTIFICAR') { // [CORREÇÃO] Não pode encerrar se justifica
+        } else if (emp.prontidao && statusApresentacao !== 'JUSTIFICAR') {
             fimJornadaHtml = renderizarFormFimJornada(emp.matricula, emp.statusFimJornada); // statusFimJornada é true/false
         }
 
@@ -253,44 +261,46 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         fragmento.appendChild(linha);
     });
     tbody.appendChild(fragmento);
+    
+    // [CORREÇÃO] 'verificarEstadoLocal' agora é 'atualizarTodosOsTimers',
+    // que é chamado pelo 'iniciarRelogio'
 }
 
 function renderizarFormJustificativaApresentacao(matricula) {
-    // ... (HTML do seu formJustificativaApresentacao) ...
+    // ... (Seu HTML está OK) ...
     return `
-        <form id="formJustificativaApresentacao">
-            <input type="hidden" name="matricula" value="${matricula}">
-            <div class="input-group input-group-sm">
-                <select name="justificativaApresentacao" class="form-select form-select-sm" required> 
-                    <option value="">Justificativa…</option>
-                    <option value="Atraso chegada 1º ônibus">Atraso chegada 1º ônibus</option>
-                    <option value="Atraso chegada 2º ônibus">Atraso chegada 2º ônibus</option>
-                    <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-                    <option value="DSS com Supervisor">DSS com Supervisor</option>
-                    <option value="Desatento/Distração">Desatento/Distração</option>
-                    <option value="Necessidade Pessoal">Necessidade Pessoal</option>
-                    <option value="PM - Exame Periódico">PM - Exame Periódico</option>
-                    <option value="PM - Exame de Retorno">PM - Exame de Retorno</option>
-                    <option value="Atraso do Táxi">Atraso do Táxi</option>
-                    <option value="Totem Ocupado">Totem Ocupado</option>
-                    <option value="Horário ADM">Horário ADM</option>
-                    <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
-                    <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso ao Posto de Trabalho</option>
-                    <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
-                </select>
-                <button type="submit" class="btn btn-danger btn-sm">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </div>
-        </form>
+    <form class="formJustificativaApresentacao">
+        <input type="hidden" name="matricula" value="${matricula}">
+        <div class="input-group input-group-sm">
+            <select name="justificativaApresentacao" class="form-select form-select-sm" required> 
+                <option value="">Justificativa…</option>
+                <option value="Atraso chegada 1º ônibus">Atraso chegada 1º ônibus</option>
+                <option value="Atraso chegada 2º ônibus">Atraso chegada 2º ônibus</option>
+                <option value="DSS com Inspetoria">DSS com Inspetoria</option>
+                <option value="DSS com Supervisor">DSS com Supervisor</option>
+                <option value="Desatento/Distração">Desatento/Distração</option>
+                <option value="Necessidade Pessoal">Necessidade Pessoal</option>
+                <option value="PM - Exame Periódico">PM - Exame Periódico</option>
+                <option value="PM - Exame de Retorno">PM - Exame de Retorno</option>
+                <option value="Atraso do Táxi">Atraso do Táxi</option>
+                <option value="Totem Ocupado">Totem Ocupado</option>
+                <option value="Horário ADM">Horário ADM</option>
+                <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
+                <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso ao Posto de Trabalho</option>
+                <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+            </select>
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </form>
     `;
 }
 
 function renderizarFormFimJornada(matricula, estaAtrasado) {
-    // ... (HTML do seu formFimJornada) ...
+    // ... (Seu HTML está OK) ...
     const displayJustificativa = estaAtrasado ? 'flex' : 'none';
     const displayBotaoNormal = estaAtrasado ? 'none' : 'block';
-
     return `
     <center>
         <form class="formFimJornada">
@@ -300,19 +310,7 @@ function renderizarFormFimJornada(matricula, estaAtrasado) {
                     <option value="">Justificativa...</option>
                     <option value="Permanência pós jornada atribuída ao CCP">Permanência pós jornada (CCP)</option>
                     <option value="Solicitação de permanência pela Supervisão de Pátio">Solicitação de permanência (Pátio)</option>
-                    <option value="Alinhamento de DBO">Alinhamento de DBO</option>
-                    <option value="Indisponibilidade do Totem">Indisponibilidade do totem</option>
-                    <option value="Atendimento à Incidentes Operacionais">Atendimento à incidentes</option>
-                    <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-                    <option value="DSS com Supervisor">DSS com Supervisor</option>
-                    <option value="Distração/Desatenção no apontamento da saída">Distração/Desatenção</option>
-                    <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
-                    <option value="Eventos de ACT">Eventos de ACT</option>
-                    <option value="Atraso de Transporte">Atraso de Transporte</option>
-                    <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
-                    <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso</option>
-                    <option value="Horário ADM">Horário ADM</option>
-                </select>
+                    </select>
                 <button type="submit" class="btn btn-danger btn-sm">
                     <i class="fas fa-paper-plane"></i>
                 </button>
@@ -325,155 +323,135 @@ function renderizarFormFimJornada(matricula, estaAtrasado) {
     `;
 }
 
-// --- LÓGICA DE ESTADO (TIMERS E LOCALSTORAGE) ---
-
-function verificarEstadoLocal() {
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    if (empregadoArmazenadoJSON) {
-        try {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-
-            if (empregado.supervisao !== supervisaoAtual || empregado.local !== localAtual) {
-                localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
-                return;
-            }
-            
-            // Inicia o timer de PRONTIDÃO (se o placeholder existir)
-            const contProntidao = document.getElementById('prontidao-dinamica-container');
-            if (contProntidao) {
-                habilitarProntidao(empregado.matricula, empregado.horarioApresentacao);
-            }
-            
-            // Inicia o timer de LANCHE (se o placeholder existir)
-            const contLanche = document.querySelector('.cronometro-lanche');
-            if (contLanche) {
-                // [CORREÇÃO] Inicia o helper de cronômetro (Regra 3)
-                iniciarCronometro(contLanche, contLanche.dataset.starttime, 15); // 15 minutos
-            }
-            
-            // Inicia o timer de REFEIÇÃO (se o placeholder existir)
-            // [CORREÇÃO] Bug de seletor (querySelector)
-            const contRefeicao = document.querySelector('.cronometro-refeicao');
-            if (contRefeicao) {
-                // [CORREÇÃO] Inicia o helper de cronômetro (Regra 3)
-                iniciarCronometro(contRefeicao, contRefeicao.dataset.starttime, 60); // 60 minutos
-            }
-        } catch (error) {
-            console.error("Erro ao ler localStorage: ", error);
-            localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        }
-    }
-}
-
-function habilitarProntidao(matricula, horarioApresentacao) {
-    const containerAcoes = document.getElementById('prontidao-dinamica-container');
-    if (!containerAcoes) return; 
-
-    // [CORREÇÃO] Previne que o polling de 40s recrie o timer
-    if (containerAcoes.innerHTML.includes('formProntidao')) return; 
-
-    const horaInicio = new Date(horarioApresentacao);
-    if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
-
-    containerAcoes.innerHTML = `
-        <div id="prontidao-message" class="fs-5 text-center"></div>
-        <form id="formProntidao">
-            <input type="hidden" name="matricula" value="${matricula}">
-            <div id="justificativas-prontidao-container" class="mb-2 input-group" style="display: none;">
-                <select name="justificativaProntidao" id="justificativaProntidao" class="form-select form-select-sm" required> 
-                    <option value="">Justificativa…</option>
-                    <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-                    <option value="DSS com Supervisor">DSS com Supervisor</option>
-                    <option value="Totem Ocupado">Totem Ocupado</option>
-                    <option value="Falta de EPI">Falta de EPI</option>
-                    <option value="Indisponibilidade DSS">Indisponibilidade DSS</option>
-                    <option value="Necessidade Pessoal">Necessidade Pessoal</option>
-                    <option value="Perda no TAC">Perda no TAC</option>
-                    <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+function renderizarEscolhaLanche(matricula) {
+    // ... (Seu HTML está OK) ...
+    return `
+        <div class="d-flex justify-content-center">
+            <div class="input-group input-group-sm shadow-sm w-100">
+                <select class="form-select form-select-sm" name="escolhaIntervalo">
+                    <option value="" disabled selected>Escolha...</option>
+                    <option value="CEDO">MANHÃ (08:00 às 10:30)</option>
+                    <option value="TARDE">TARDE (14:00 às 16:30)</option>
                 </select>
-                <button type="submit" class="btn btn-danger btn-sm">
+                <button type="button" class="btn btn-success btn-sm btn-escolha" data-matricula="${matricula}">
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
-            <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm w-100" style="display: none;">
-                Pronto
-            </button>
-        </form>
-        <div id="prontidao-form-message" class="mt-1 text-center small"></div>
+        </div>
     `;
+}
 
-    // Função interna do timer (Tick)
-    const atualizarTimerProntidao = () => {
+// --- LÓGICA DE ESTADO (TIMERS) ---
+
+/**
+ * [REMOVIDO] 'verificarEstadoLocal'
+ * [REMOVIDO] 'habilitarProntidao'
+ * [REMOVIDO] 'limparProntidao'
+ */
+
+/**
+ * [NOVA FUNÇÃO] O "Master Tick" para timers paralelos (Regra 5).
+ * Esta função é chamada a cada segundo pelo 'iniciarRelogio'.
+ */
+function atualizarTodosOsTimers() {
+    // 1. Atualiza todos os timers de PRONTIDÃO
+    const containersProntidao = document.querySelectorAll('.prontidao-dinamica-container');
+    
+    containersProntidao.forEach(container => {
+        const horarioApresentacao = container.dataset.horarioApresentacao;
+        if (!horarioApresentacao) return;
+
+        const horaInicio = new Date(horarioApresentacao);
         const agora = new Date();
         const diffSegundos = Math.floor((agora - horaInicio) / 1000);
-        const displayMessage = document.getElementById('prontidao-message');
-        const botao = document.getElementById('botaoProntidao');
-        const containerJustificativa = document.getElementById('justificativas-prontidao-container');
 
-        if (!displayMessage || !botao || !containerJustificativa) {
-            clearInterval(intervaloTimerProntidao);
-            return;
+        // Se o timer ainda não foi renderizado, cria o HTML
+        if (!container.innerHTML.includes('formProntidao')) {
+            container.innerHTML = `
+                <div id="prontidao-message" class="fs-5 text-center"></div>
+                <form id="formProntidao">
+                    <input type="hidden" name="matricula" value="${container.dataset.matricula}">
+                    <div id="justificativas-prontidao-container" class="mb-2 input-group" style="display: none;">
+                        <select name="justificativaProntidao" class="form-select form-select-sm" required> 
+                            <option value="">Justificativa…</option>
+                            <option value="DSS com Inspetoria">DSS com Inspetoria</option>
+                            <option value="DSS com Supervisor">DSS com Supervisor</option>
+                            <option value="Totem Ocupado">Totem Ocupado</option>
+                            <option value="Falta de EPI">Falta de EPI</option>
+                            <option value="Indisponibilidade DSS">Indisponibilidade DSS</option>
+                            <option value="Necessidade Pessoal">Necessidade Pessoal</option>
+                            <option value="Perda no TAC">Perda no TAC</option>
+                            <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+                        </select>
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm w-100" style="display: none;">
+                        Pronto
+                    </button>
+                </form>
+                <div id="prontidao-form-message" class="mt-1 text-center small"></div>
+            `;
         }
-        
-        // [CORREÇÃO] Teste de 10s (para debug) -> 300s (5 min)
-        // FASE 1 (0-5 min)
-        if (diffSegundos <= 300) { 
+
+        // Agora que o HTML existe, atualiza a UI
+        const displayMessage = container.querySelector('#prontidao-message');
+        const botao = container.querySelector('#botaoProntidao');
+        const containerJustificativa = container.querySelector('#justificativas-prontidao-container');
+
+        if (!displayMessage || !botao || !containerJustificativa) return;
+
+        // Lógica das 3 Fases (Regra 3)
+        if (diffSegundos <= 300) { // 5 min
             displayMessage.style.display = 'block';
-            displayMessage.innerHTML = 'Faça sua <span class="text-warning"><strong>Boa Jornada</strong></span>...'; // (seu texto)
+            displayMessage.innerHTML = 'Faça sua <span class="text-warning"><strong>Boa Jornada</strong></span>...';
             botao.style.display = 'none';
             containerJustificativa.style.display = 'none';
-        // FASE 2 (5-15 min)
-        } else if (diffSegundos <= 900) { 
+        } else if (diffSegundos <= 900) { // 15 min
             displayMessage.style.display = 'none';
             botao.style.display = 'block';
             botao.className = 'btn btn-success btn-sm w-100';
             botao.innerHTML = 'Pronto';
             containerJustificativa.style.display = 'none';
-            const select = document.getElementById('justificativaProntidao');
+            const select = container.querySelector('#justificativaProntidao');
             if (select) select.required = false;
-        // FASE 3 (>15 min)
-        } else {
+        } else { // > 15 min
             displayMessage.style.display = 'none';
             botao.style.display = 'none';
             containerJustificativa.style.display = 'flex';
-            const select = document.getElementById('justificativaProntidao');
+            const select = container.querySelector('#justificativaProntidao');
             if (select) select.required = true;
         }
-    };
+    });
 
-    atualizarTimerProntidao(); // Roda imediatamente (resolve o "atraso" de 1s)
-    intervaloTimerProntidao = setInterval(atualizarTimerProntidao, 1000);
-}
-
-/**
- * Limpa o timer e o status local de Prontidão.
- */
-function limparProntidao() {
-    if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
+    // 2. Atualiza todos os timers de LANCHE (Regra 3)
+    document.querySelectorAll('.cronometro-lanche').forEach(el => {
+        if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
+            iniciarCronometro(el, el.dataset.starttime, 15);
+            el.dataset.timerIniciado = 'true'; // Impede de reiniciar
+        }
+    });
     
-    // [CORREÇÃO] Atualiza o localStorage, não o apaga
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    if (empregadoArmazenadoJSON) {
-        const empregado = JSON.parse(empregadoArmazenadoJSON);
-        empregado.statusProntidao = 'Pronto'; // Atualiza o status local
-        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
-    }
-    carregarEMontarTabela(); // Recarrega a tabela
+    // 3. Atualiza todos os timers de REFEIÇÃO (Regra 3)
+    document.querySelectorAll('.cronometro-refeicao').forEach(el => {
+        if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
+            iniciarCronometro(el, el.dataset.starttime, 60);
+            el.dataset.timerIniciado = 'true'; // Impede de reiniciar
+        }
+    });
 }
+
 
 // --- MANIPULADORES DE EVENTOS (EVENT HANDLERS) ---
 
-/**
- * Vincula todos os listeners dos formulários dinâmicos da tabela.
- */
-function vincularListenersDeTabela() {
+function listenersDinamicos() {
     const tbody = document.getElementById('tabelaApresentacoes');
 
     // Listener para SUBMIT (formulários)
     tbody.addEventListener('submit', (evento) => {
         const form = evento.target;
         
-        // [CORREÇÃO] IDs/Classes precisam bater com o HTML renderizado
         if (form.id === 'formJustificativaApresentacao') {
             aoEnviarJustificativaApresentacao(evento);
         }
@@ -488,11 +466,15 @@ function vincularListenersDeTabela() {
     // Listener para CLICK (botões Lanche/Refeição)
     tbody.addEventListener('click', (evento) => {
         const target = evento.target.closest('button');
-        if (!target) return; // Não foi um botão
+        if (!target) return;
         
         const matricula = target.dataset.matricula;
-        if (!matricula) return; // Botão não tem matrícula
-        
+        if (!matricula) return;
+
+        if (target.classList.contains('btn-escolha')) {
+            const select = target.closest('.input-group').querySelector('select');
+            aoEnviarEscolhaIntervalo(target, select, matricula);
+        }
         if (target.classList.contains('btn-lanche')) {
             aoEnviarLanche(target, matricula);
         }
@@ -502,9 +484,6 @@ function vincularListenersDeTabela() {
     });
 }
 
-/**
- * Handler: Envio do formulário principal de Apresentação (Regra 1)
- */
 async function aoEnviarApresentacao(evento) {
     evento.preventDefault();
     const form = evento.target;
@@ -516,29 +495,29 @@ async function aoEnviarApresentacao(evento) {
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
     msgContainer.innerHTML = '';
     
+    console.log("Enviando Apresentação...");
     const result = await api.postApresentacao(formData);
     await processarRespostaApresentacao(result, formData);
 }
 
-/**
- * Handler: Processa a resposta da API de Apresentação (Regra 1)
- */
 async function processarRespostaApresentacao(result, formData) {
     const botao = document.getElementById("botaoApresentar");
     const msgContainer = document.getElementById("form-message");
+    console.log("Processando Resposta:", result);
 
-    // [CORREÇÃO] Verifica booleano, não string
-    if (result.success === true) { 
+    // [CORREÇÃO] ASP envia string "true"
+    if (result.success === "true") { 
         const matricula = formData.get("matricula");
         const dadosEmpregado = {
             matricula: matricula,
             horarioApresentacao: result.horarioApresentacao,
             supervisao: supervisaoAtual,
             local: localAtual,
-            statusApresentacao: result.status, // Salva "OK" ou "JUSTIFICAR"
+            statusApresentacao: result.status, 
         };
-        // [CORREÇÃO] Salva o objeto inteiro
-        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(dadosEmpregado));
+        // [CORREÇÃO] Salva na variável local
+        empregadoAtivoLocal = dadosEmpregado; 
+        console.log("Empregado Ativo definido:", empregadoAtivoLocal);
 
         document.getElementById("matricula").value = '';
         msgContainer.innerHTML = `<span class="text-success">${result.message || 'Apresentação registrada!'}</span>`;
@@ -550,7 +529,7 @@ async function processarRespostaApresentacao(result, formData) {
         botao.disabled = false;
         botao.innerHTML = '<i class="fas fa-check"></i> Apresentar';
     } else {
-        // Falha (Confirmação ou Erro)
+        // ... (Sua lógica de 'switch' está OK) ...
         switch (result.code) {
             case "CONFIRM_SUPERVISAO":
                 if (confirm(result.message)) {
@@ -581,9 +560,6 @@ async function processarRespostaApresentacao(result, formData) {
     }
 }
 
-/**
- * Handler: Envio do formulário de Justificativa de Apresentação (Regra 2)
- */
 async function aoEnviarJustificativaApresentacao(evento) {
     evento.preventDefault();
     const form = evento.target;
@@ -598,7 +574,7 @@ async function aoEnviarJustificativaApresentacao(evento) {
 
     const result = await api.postJustificativaApresentacao(dadosForm);
 
-    if (result.success === true) { // Verificação explícita
+    if (result.success === "true") { // [CORREÇÃO] Verificação explícita
         aoJustificativaApresentacaoOK();
     } else {
         alert(`Erro ao enviar justificativa: ${result.message}`);
@@ -607,28 +583,20 @@ async function aoEnviarJustificativaApresentacao(evento) {
     }
 }
 
-/**
- * Helper: Atualiza o localStorage após justificar o atraso
- */
 function aoJustificativaApresentacaoOK() {
-    const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-    if (empregadoArmazenadoJSON) {
-        const empregado = JSON.parse(empregadoArmazenadoJSON);
-        empregado.statusApresentacao = 'JUSTIFICATIVA_OK';
-        localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+    // [CORREÇÃO] Atualiza a variável local
+    if (empregadoAtivoLocal) {
+        empregadoAtivoLocal.statusApresentacao = 'JUSTIFICATIVA_OK';
     }
     carregarEMontarTabela();
 }
 
-/**
- * Handler: Envio do formulário de Prontidão (Regra 3)
- */
 async function aoEnviarProntidao(evento) {
     evento.preventDefault();
     const form = evento.target;
     const botaoPronto = form.querySelector('#botaoProntidao');
     const botaoJustificar = form.querySelector('.btn-danger'); 
-    const containerMessage = document.getElementById('prontidao-form-message');
+    const containerMessage = form.nextElementSibling; // [CORREÇÃO] Pega o 'prontidao-form-message'
     const dadosForm = new URLSearchParams(new FormData(form));
 
     dadosForm.append('supervisao', supervisaoAtual);
@@ -648,11 +616,16 @@ async function aoEnviarProntidao(evento) {
 
     const result = await api.postProntidao(dadosForm);
 
-    if (result.success === true) { // Verificação explícita
+    if (result.success === "true") { // [CORREÇÃO] Verificação explícita
         if (containerMessage) containerMessage.innerHTML = `<span class="text-success">Prontidão registrada!</span>`;
+        
+        // [CORREÇÃO] Limpa o 'empregadoAtivoLocal' da prontidão
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(dadosForm.get('matricula'))) {
+            empregadoAtivoLocal.statusProntidao = 'Pronto'; // Atualiza o status local
+        }
+        
         setTimeout(() => {
-            // [CORREÇÃO] Chama a função correta
-            limparProntidao(); // Atualiza o localStorage e recarrega a tabela
+            carregarEMontarTabela(); // Recarrega a tabela
         }, 1000);
     } else {
         if (containerMessage) containerMessage.innerHTML = `<span class="text-danger">${result.message}</span>`;
@@ -662,74 +635,81 @@ async function aoEnviarProntidao(evento) {
     }
 }
 
-/**
- * [NOVO] Handler: Clique no botão Lanche
- */
+async function aoEnviarEscolhaIntervalo(botao, select, matricula) {
+    const valor = select.value;
+    if (valor === "") {
+        alert('Selecione um intervalo para lanche...');
+        return;
+    }
+
+    botao.disabled = true;
+    select.disabled = true;
+    botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    const formData = new URLSearchParams();
+    formData.append('matricula', matricula); // [CORREÇÃO] Erro de digitação
+    formData.append('escolhaIntervalo', valor);
+
+    const result = await api.postEscolhaIntervalo(formData); // [CORREÇÃO] Faltava 'await'
+
+    if (result.success === "true") { // [CORREÇÃO] Verificação explícita
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(matricula)) {
+            empregadoAtivoLocal.lancheStatus = (valor === 'CEDO') ? "08:00 às 10:30" : "14:00 às 16:30";
+        }
+        await carregarEMontarTabela();
+    } else {
+        alert(result.message || 'Erro ao registrar Escolha');
+        select.disabled = false;
+        botao.disabled = false;
+        botao.innerHTML = '<i class="fas fa-paper-plane"></i>';
+    }
+}
+
 async function aoEnviarLanche(botao, matricula) {
     botao.disabled = true;
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     const formData = new URLSearchParams();
     formData.append('matricula', matricula);
-
-    // [CORREÇÃO] Adicionado 'await'
     const result = await api.postLanche(formData); 
 
-    // [CORREÇÃO] Verificação explícita
-    if (result.success === true) { 
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-            // [CORREÇÃO] Comparação correta
-            if (String(empregado.matricula) === String(matricula)) {
-                // 'horarioApresentacao' é o nome do campo que a API retorna
-                empregado.lancheStatus = "TIMER_LANCHE:" + result.horarioApresentacao; 
-                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
-            }
+    if (result.success === "true") { // [CORREÇÃO] Verificação explícita
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(matricula)) {
+            // [CORREÇÃO] 'horarioApresentacao' é o campo de retorno
+            empregadoAtivoLocal.lancheStatus = "TIMER_LANCHE:" + result.horarioApresentacao; 
+            console.log("Lanche salvo no estado local:", empregadoAtivoLocal);
         }
         await carregarEMontarTabela();
     } else {
         alert(result.message || 'Erro ao registrar lanche.');
         botao.disabled = false;
-        botao.innerHTML = 'Solicitar Lanche';
+        botao.innerHTML = 'Lanche';
     }
 }
 
-/**
- * [NOVO] Handler: Clique no botão Refeição
- */
 async function aoEnviarRefeicao(botao, matricula) {
     botao.disabled = true;
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     const formData = new URLSearchParams();
     formData.append('matricula', matricula);
-
-    // [CORREÇÃO] Adicionado 'await'
     const result = await api.postRefeicao(formData); 
+    console.log("Resultado Refeição:", result); // Log de Ajuda
 
-    // [CORREÇÃO] Verificação explícita
-    if (result.success === true) { 
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-            // [CORREÇÃO] Comparação correta
-            if (String(empregado.matricula) === String(matricula)) {
-                empregado.refeicaoStatus = "TIMER_REFEICAO:" + result.horarioApresentacao;
-                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
-            }
+    if (result.success === "true") { // [CORREÇÃO] Verificação explícita
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(matricula)) {
+            // [CORREÇÃO] 'horarioApresentacao' é o campo de retorno
+            empregadoAtivoLocal.refeicaoStatus = "TIMER_REFEICAO:" + result.horarioApresentacao;
+            console.log("Refeição salva no estado local:", empregadoAtivoLocal);
         }
         await carregarEMontarTabela();
     } else {
         alert(result.message || 'Erro ao registrar Refeição.');
         botao.disabled = false;
-        botao.innerHTML = 'Solicitar Refeição';
+        botao.innerHTML = 'Refeição';
     }
 }
 
-/**
- * Handler: Envio do formulário de Fim de Jornada (Regra 2)
- */
 async function aoEnviarFimJornada(evento) {
     evento.preventDefault(); 
     const form = evento.target;
@@ -737,7 +717,6 @@ async function aoEnviarFimJornada(evento) {
     const botaoJustificativa = form.querySelector('.btn-danger');
     const dadosForm = new URLSearchParams(new FormData(form));    
     
-    // [CORREÇÃO] Adiciona contexto para o ASP
     dadosForm.append('supervisao', supervisaoAtual);
     dadosForm.append('local', localAtual);
     
@@ -751,18 +730,25 @@ async function aoEnviarFimJornada(evento) {
     } else if (botaoJustificativa) {
         botaoJustificativa.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     }
+    
+    // [CORREÇÃO] O nome do campo de justificativa está errado
+    const justificativa = dadosForm.get('justificativaFimJornada'); 
+    if (!justificativa || justificativa.trim() === '') {
+        const confirmar = confirm('Tem certeza que deseja encerrar sua Jornada?');
+        if (!confirmar) {
+            if (botaoNormal) botaoNormal.disabled = false;
+            if (botaoJustificativa) botaoJustificativa.disabled = false;
+            if (select) select.disabled = false;
+            return;
+        }
+    }
 
     const result = await api.postFimJornada(dadosForm);
 
-    // [CORREÇÃO] Verificação explícita
-    if (result.success === true) {
-        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
-        if (empregadoArmazenadoJSON) {
-            const empregado = JSON.parse(empregadoArmazenadoJSON);
-            if (String(empregado.matricula) === String(dadosForm.get('matricula'))) {
-                // Limpa o storage pois a jornada deste usuário terminou
-                localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
-            }
+    if (result.success === "true") { // [CORREÇÃO] Verificação explícita
+        if (empregadoAtivoLocal && String(empregadoAtivoLocal.matricula) === String(dadosForm.get('matricula'))) {
+            empregadoAtivoLocal = null; // Limpa o usuário ativo
+            console.log("Sessão local encerrada.");
         }
         await carregarEMontarTabela();
     } else {
