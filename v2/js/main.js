@@ -10,8 +10,10 @@ function app() {
     setHeaderLayout(layout);
     
     if (layout === 'patio' && supervisao && local) {
+        window.viewLocal = viewLocal;
         viewLocal.init(supervisao, local);
     } else if (layout === 'CCP') {
+        window.viewCCP = viewCCP;
         viewCCP.init(supervisao);
     } else {
         document.getElementById('page-header').innerHTML = `
@@ -23,6 +25,7 @@ function app() {
 
 function setHeaderLayout(layoutParam) {
     const layoutLabelEl = document.getElementById('layout-label');
+    const linkMenu = document.getElementById('linkMenu');
     if (!layoutLabelEl) return;
 
     const layout = (layoutParam || '').toString().trim().toLowerCase();
@@ -31,12 +34,15 @@ function setHeaderLayout(layoutParam) {
         document.title = 'CCP | Controle de Apresentação';
         layoutLabelEl.textContent = 'CCP';
         layoutLabelEl.className = "text-danger";
+        linkMenu.href = '#';
     } else if (layout === 'patio') {
         document.title = 'PÁTIO | Controle de Apresentação';
         layoutLabelEl.textContent = 'PÁTIO';
+        linkMenu.href = 'default.html';
     } else {
         document.title = 'PÁTIO | Controle de Apresentação';
         layoutLabelEl.textContent = 'PÁTIO';
+        linkMenu.href = 'default.html';
     }
 }
 
