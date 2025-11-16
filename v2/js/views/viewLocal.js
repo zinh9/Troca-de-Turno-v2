@@ -123,6 +123,31 @@ async function carregarEMontarTabela() {
             data-bs-html="true" 
             title="TEMPO REFERENCIAL: 0${dados.info.horarioReferencia}"></i> Apresentação
         `; // Formatar o horário referêncial CORRETAMENTE
+
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        if (empregadoArmazenadoJSON) {
+            const empregadoLocal = JSON.parse(empregadoArmazenadoJSON);
+            const empNoBanco = dados.empregados.find(e => String(e.matricula === String(empregadoLocal.matricula)));
+
+            if (empNoBanco) {
+                let mudou = false;
+                if (empNoBanco.prontidao && !empregadoLocal.statusProntidao) {
+                    empregadoLocal.statusProntidao = 'Pronto';
+                    mudou = true;
+                }
+                if (empNoBanco.lancheStatus.startsWith('TIMER_') && empregadoLocal.lancheStatus !== empNoBanco.lancheStatus) {
+                    empregadoLocal.lancheStatus = empNoBanco.lancheStatus;
+                    mudou = true;
+                }
+                if (empNoBanco.refeicaoStatus.startsWith('TIMER_') && empregadoLocal.refeicaoStatus !== empNoBanco.refeicaoStatus) {
+                    empregadoLocal.refeicaoStatus = empNoBanco.refeicaoStatus;
+                    mudou = true;
+                }
+                if (mudou) {
+                    localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregadoLocal));
+                }
+            }
+        }
         
         montarLinhasTabela(dados.empregados, dados.info.horarioReferencia);
 
@@ -180,7 +205,7 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         let prontidaoHtml = 'Aguardando...';
         // O timer de prontidão SÓ aparece para o usuário ATIVO (do localStorage)
         if (empregadoAtivo && !emp.prontidao) { // Ver com o cabeça para adicionar (&& statusApresentacao !== 'JUSTIFICAR')
-            prontidaoHtml = '<div id="prontidao-dinamica-container"></div>';
+            prontidaoHtml = `<div id="prontidao-dinamica-container-${emp.matricula}"></div>`;
         } else if (emp.statusProntidao === 'Pronto com atraso') {
             prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`
         } else if (emp.statusProntidao === 'Pronto') {
@@ -189,22 +214,9 @@ function montarLinhasTabela(empregados, horarioReferencia) {
 
         let lancheHtml = '--:--';
         if (lancheStatus && lancheStatus === 'HABILITAR_ESCOLHA') {
-            lancheHtml = `
-                <div class="d-flex justify-content-center">
-                    <div class="input-group input-group-sm shadow-sm rounded w-75">
-                        <select class="form-select" name="escolhaIntervalo" id="escolhaIntervalo" required>
-                            <option value="" disabled selected>Escolha o intervalo</option>
-                            <option value="CEDO">CEDO</option>
-                            <option value="TARDE">TARDE</option>
-                        </select>
-                        <button type="button" class="btn btn-success btn-sm btn-escolha" data-matricula="${emp.matricula}">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
+            lancheHtml = renderizarEscolhaLanche(emp.matricula);
         } else if (lancheStatus && lancheStatus.startsWith('TIMER_LANCHE.')) {
-            lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split('.')[1]}"></div>`;
+            lancheHtml = `<div id="cronometro-lanche-${emp.matricula}" class="cronometro-lanche" data-starttime="${lancheStatus.split('.')[1]}"></div>`;
         } else if (lancheStatus && lancheStatus.startsWith('ACAO_')) {
             lancheHtml = `<button class="btn btn-success btn-sm btn-lanche" data-matricula="${emp.matricula}">Solicitar Lanche</button>`;
         } else {
@@ -213,7 +225,7 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         
         let refeicaoHtml = '--:--';
         if (refeicaoStatus && refeicaoStatus.startsWith('TIMER_REFEICAO.')) {
-            refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${refeicaoStatus.split('.')[1]}"></div>`;
+            refeicaoHtml = `<div id="cronometro-refeicao-${emp.matricula}" class="cronometro-refeicao" data-starttime="${refeicaoStatus.split('.')[1]}"></div>`;
         } else if (refeicaoStatus && refeicaoStatus.startsWith('ACAO_')) {
             refeicaoHtml = `<button class="btn btn-success btn-sm btn-refeicao" data-matricula="${emp.matricula}">Solicitar Refeição</button>`;
         } else {
@@ -312,6 +324,23 @@ function renderizarFormFimJornada(matricula, estaAtrasado) {
     `;
 }
 
+function renderizarEscolhaLanche(matricula) {
+    return `
+        <div class="d-flex justify-content-center">
+            <div class="input-group input-group-sm shadow-sm w-75">
+                <select class="form-select form-select-sm" name="escolhaIntervalo">
+                    <option value="" disabled selected>Escolha um intervalo...</option>
+                    <option value="CEDO">MANHÃ (08:00 às 10:30)</option>
+                    <option value="TARDE">TARDE (14:00 às 16:30)</option>
+                </select>
+                <button type="button" class="btn btn-success btn-sm btn-escolha" data-matricula="${matricula}">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 // --- LÓGICA DE ESTADO (TIMERS E LOCALSTORAGE) ---
 
 function verificarEstadoLocal() {
@@ -324,19 +353,18 @@ function verificarEstadoLocal() {
                 localStorage.removeItem(CHAVE_ARMAZENAMENTO_LOCAL);
                 return;
             }
-
-            // Se o container de prontidão existe (ou seja, apresentação NÃO está pendente)
-            if (document.getElementById('prontidao-dinamica-container')) {
-                habilitarProntidao(empregado.matricula, empregado.horarioApresentacao);
+            
+            const containerProntidao = document.getElementById(`prontidao-dinamica-container-${empregado.matricula}`);
+            if (containerProntidao) {
+                habilitarProntidao(containerProntidao, empregado.matricula, empregado.horarioApresentacao);
             }
 
-            const containerLanche = document.querySelector('.cronometro-lanche');
+            const containerLanche = document.getElementById(`cronometro-lanche-${empregado.matricula}`);
             if (containerLanche) {
-                
                 iniciarCronometro(containerLanche, containerLanche.dataset.starttime, 15);
             }
 
-            const containerRefeicao = document.querySelector('.cronometro-refeicao');
+            const containerRefeicao = document.getElementById(`cronometro-refeicao-${empregado.matricula}`);
             if (containerRefeicao) {
                 iniciarCronometro(containerRefeicao, containerRefeicao.dataset.starttime, 60);
             }
@@ -347,9 +375,9 @@ function verificarEstadoLocal() {
     }
 }
 
-function habilitarProntidao(matricula, horarioApresentacao) {
-    const containerAcoes = document.getElementById('prontidao-dinamica-container');
+function habilitarProntidao(containerAcoes, matricula, horarioApresentacao) {
     if (!containerAcoes) return;
+    if (containerAcoes.innerHTML.includes('formProntidao')) return;
 
     const horaInicio = new Date(horarioApresentacao);
     if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
@@ -384,9 +412,9 @@ function habilitarProntidao(matricula, horarioApresentacao) {
         const agora = new Date();
         const diffSegundos = Math.floor((agora - horaInicio) / 1000);
 
-        const displayMessage = document.getElementById('prontidao-message');
-        const botao = document.getElementById('botaoProntidao');
-        const containerJustificativa = document.getElementById('justificativas-prontidao-container');
+        const displayMessage = containerAcoes.querySelector('#prontidao-message');
+        const botao = containerAcoes.querySelector('#botaoProntidao');
+        const containerJustificativa = containerAcoes.querySelector('#justificativas-prontidao-container');
 
         if (!displayMessage || !botao || !containerJustificativa) {
             clearInterval(intervaloTimerProntidao);
@@ -421,7 +449,6 @@ function habilitarProntidao(matricula, horarioApresentacao) {
 
 function limparProntidao() {
     if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
-    // Limpa o storage pois a "sessão" (Apresentação -> Prontidão) terminou
     const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
     if (empregadoArmazenadoJSON) {
         const empregado = JSON.parse(empregadoArmazenadoJSON);
@@ -460,12 +487,11 @@ function listenersDinamicos() {
         if (!target) console.log("não achei");
         
         const matricula = target.dataset.matricula;
-        
-        console.log(matricula);
         if (!matricula) return;
 
         if (target.classList.contains('btn-escolha')) {
-            aoEnviarEscolhaIntervalo(target, matricula);
+            const select = target.closest('.input-group').querySelector('select');
+            aoEnviarEscolhaIntervalo(target, select, matricula);
         }
         
         if (target.classList.contains('btn-lanche')) {
@@ -649,7 +675,7 @@ async function aoEnviarLanche(botao, matricula) {
         if (empregadoArmazenadoJSON) {
             const empregado = JSON.parse(empregadoArmazenadoJSON);
             if (String(empregado.matricula === String(matricula))) {
-                empregado.lancheStatus = "TIMER_LANCHE:" + result.horarioApresentacao;
+                empregado.lancheStatus = "TIMER_LANCHE." + result.horarioApresentacao;
                 localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
             }
         }
@@ -661,27 +687,38 @@ async function aoEnviarLanche(botao, matricula) {
     }
 }
 
-async function aoEnviarEscolhaIntervalo(botao, matricula) {
-    botao.disabled = true;
-    const select = document.getElementById('escolhaIntervalo');
+async function aoEnviarEscolhaIntervalo(botao, select, matricula) {
     const valor = select.value;
-    const formData = new URLSearchParams();
-    console.log('opa')
+    if (valor === "") {
+        alert('Selecione um intervalo para lanche...');
+        return;
+    }
 
+    botao.disabled = true;
     select.disabled = true;
-    select.innerHTML = 'Registrando <i class="fas fa-spinner fa-spin"></i>'
+    botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    formData.append('matricula', matricula);
+    const formData = new URLSearchParams();
+    formData.append('matriucla', matricula);
     formData.append('escolhaIntervalo', valor);
 
-    const result = await api.postEscolhaIntervalo(formData);
+    const result = api.postEscolhaIntervalo(formData);
 
     if (result.success) {
+        const empregadoArmazenadoJSON = localStorage.getItem(CHAVE_ARMAZENAMENTO_LOCAL);
+        if (empregadoArmazenadoJSON) {
+            const empregado = JSON.parse(empregadoArmazenadoJSON);
+            if (String(empregado.matricula === String(matricula))) {
+                empregado.lancheStatus = (valor === 'CEDO') ? "08:00 às 10:30" : "14:00 às 16:30";
+                localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
+            }
+        }
         await carregarEMontarTabela();
     } else {
-        alert(result.message || 'Erro ao registrar Escolha.');
+        alert(result.message || 'Erro ao registrar Escolha');
         select.disabled = false;
         botao.disabled = false;
+        botao.innerHTML = '<i class="fas fa-paper-plane"></i>';
     }
 }
 
@@ -699,7 +736,7 @@ async function aoEnviarRefeicao(botao, matricula) {
         if (empregadoArmazenadoJSON) {
             const empregado = JSON.parse(empregadoArmazenadoJSON);
             if (String(empregado.matricula === String(matricula))) {
-                empregado.refeicaoStatus = "TIMER_REFEICAO:" + result.horarioApresentacao;
+                empregado.refeicaoStatus = "TIMER_REFEICAO." + result.horarioApresentacao;
                 localStorage.setItem(CHAVE_ARMAZENAMENTO_LOCAL, JSON.stringify(empregado));
             }
         }
