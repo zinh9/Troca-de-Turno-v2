@@ -1,16 +1,18 @@
 import { api } from '../services/apiService.js';
-import { horaParaMinutos } from '../utils/helpers.js';
-import { iniciarRelogio } from '../utils/helpers.js';
+import { iniciarRelogio, atualizarQueryString, iniciarCronometro } from '../utils/helpers.js';
 
 let supervisaoAtual = null;
 let intervaloPollingTabela = null;
 
 export const viewCCP = {
-    init: init
+    init: init,
+    atualizarTimers: atualizarTimers 
 };
 
 async function init(supervisao) {
     supervisaoAtual = supervisao;
+
+    window.viewCCP = viewCCP;
 
     montarLayout();
     listenersDinamicos();
@@ -20,7 +22,7 @@ async function init(supervisao) {
     if (intervaloPollingTabela) clearInterval(intervaloPollingTabela);
     intervaloPollingTabela = setInterval(() => carregarEMontarTabela(), 40000);
 
-    iniciarRelogio();
+    iniciarRelogio(true);
 }
 
 function montarLayout() {
@@ -80,6 +82,8 @@ async function carregarEMontarTabela() {
         tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
+
+        atualizarTimers();
     } else {
         document.getElementById('tabelaApresentacoes').innerHTML = `
             <tr><td colspan="9" class="text-danger">Falha ao carregar dados: ${dados ? dados.message : 'sem resposta'}</td></tr>
@@ -94,7 +98,7 @@ function montarLinhasTabela(empregados) {
 
     const fragmento = document.createDocumentFragment();
 
-    if (!empregados || empregados.lenght === 0) {
+    if (!empregados || empregados.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="text-danger">Nenhuma apresentação registrada</td></tr>';
         return;
     }
@@ -126,11 +130,17 @@ function montarLinhasTabela(empregados) {
             chamadaHtml = '<span class="text-white">ACIONADO</span>';
         }
 
-        let lancheHtml = '';
+        let lancheHtml = '--:--';
         if (emp.lancheStatus && emp.lancheStatus.startsWith('TIMER_LANCHE.')) {
             lancheHtml = `<div class="cronometro-lanche" data-starttime="${emp.lancheStatus.split('.')[1]}"></div>`;
+        } else if (emp.lancheCPT) {
+            lancheHtml = `<span class="text-white">${emp.lancheCPT}</span>`;
         } else if (emp.lancheStatus && emp.lancheStatus.startsWith('ACAO_')) {
+            lancheHtml = `<button class="btn btn-sm btn-success btn-lanche-cpt" data-matricula="${emp.matricula}">Liberar Lanche</button>`;
+        } else if (emp.lancheStatus && emp.lancheStatus.startsWith('HABILITAR_ESCOLHA')) {
             lancheHtml = `<span class="text-warning">${emp.lancheStatus.split('-')[1]}</span>`;
+        } else if (emp.lancheStatus && emp.lancheStatus === 'AGUARDANDO_REFEICAO') {
+            lancheHtml = `<button class="btn btn-sm btn-success btn-lanche-cpt" disabled>Liberar Lanche</button>`;
         } else {
             lancheHtml = `<span class="text-warning">${emp.lancheStatus}</span>`;
         }
@@ -138,8 +148,12 @@ function montarLinhasTabela(empregados) {
         let refeicaoHtml = '';
         if (emp.refeicaoStatus && emp.refeicaoStatus.startsWith('TIMER_REFEICAO.')) {
             refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${emp.refeicaoStatus.split('.')[1]}"></div>`
+        } else if (emp.refeicaoCPT) {
+            refeicaoHtml = `<span class="text-white">${emp.refeicaoCPT}</span>`;
+        } else if (emp.refeicaoStatus && emp.refeicaoStatus.startsWith('ACAO_')) {
+            refeicaoHtml = `<button class="btn btn-success btn-sm btn-refeicao-cpt" data-matricula="${emp.matricula}">Liberar Refeição</button>`;
         } else {
-            refeicaoHtml = `<span class="text-warning">${emp.refeicaoStatus.split('-')[1]}</span>`
+            refeicaoHtml = `<span class="text-warning">${emp.refeicaoStatus}</span>`
         }
 
         let fimJornadaHtml = `<button class="btn btn-light btn-sm btn-fim-jornada" data-matricula="${emp.matricula}">Bom Descanso</button>`
@@ -157,7 +171,7 @@ function montarLinhasTabela(empregados) {
             <td>${prontidaoHtml}</td>
             <td>${chamadaHtml}</td>
             <td>${lancheHtml}</td>
-            <td></td>
+            <td>${refeicaoHtml}</td>
             <td>${fimJornadaHtml}</td>
         `;
         fragmento.appendChild(linha);
@@ -192,16 +206,34 @@ function listenersDinamicos() {
             const matricula = target.dataset.matricula;
             aoEnviarFimJornadaCPT(target, matricula);
         }
+
+        if (target.classList.contains('btn-lanche-cpt')) {
+            const matricula = target.dataset.matricula;
+            aoEnviarLancheCPT(target, matricula);
+        }
+
+        if (target.classList.contains('btn-refeicao-cpt')) {
+            const matricula = target.dataset.matricula;
+            console.log("Cheguei aqui")
+            aoEnviarRefeicaoCPT(target, matricula);
+        }
     });
 }
 
-function atualizarQueryString(pares) {
-    const url = new URL(window.location.href);
-    Object.entries(pares).forEach(([k, v]) => {
-        if (v == null || v === '') url.searchParams.delete(k);
-        else url.searchParams.set(k, v);
+function atualizarTimers() {
+    document.querySelectorAll('.cronometro-lanche').forEach(el => {
+        if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
+            iniciarCronometro(el, el.dataset.starttime, 15);
+            el.dataset.timerIniciado = 'true'; // Impede de reiniciar
+        }
     });
-    window.history.replaceState({}, '', url.toString());
+
+    document.querySelectorAll('.cronometro-refeicao').forEach(el => {
+        if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
+            iniciarCronometro(el, el.dataset.starttime, 60);
+            el.dataset.timerIniciado = 'true'; // Impede de reiniciar
+        }
+    });
 }
 
 async function aoEnviarChamada(botao, matricula) {
@@ -237,5 +269,39 @@ async function aoEnviarFimJornadaCPT(botao, matricula) {
         alert(result.message || 'Erro ao registrar chamada.');
         botao.disabled = false;
         botao.innerHTML = 'Bom Descanso';
+    }
+}
+
+async function aoEnviarLancheCPT(botao, matricula) {
+    botao.disabled = true;
+    botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    const formData = new URLSearchParams();
+    formData.append('matricula', matricula);
+
+    const result = await api.postLancheCPT(formData);
+    console.log(result, result.success)
+    if (result.success === true) {
+        await carregarEMontarTabela();
+    } else {
+        alert(result.message || 'Erro ao Liberar Lanche (CPT)');
+        botao.disabled = false;
+        botao.innerHTML = 'Liberar Lanche';
+    }
+}
+
+async function aoEnviarRefeicaoCPT(botao, matricula) {
+    botao.disabled = true;
+    botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    const formData = new URLSearchParams();
+    formData.append('matricula', matricula);
+
+    const result = await api.postRefeicaoCPT(formData);
+
+    if (result.success) {
+        await carregarEMontarTabela();
+    } else {
+        alert(result.message || 'Erro ao Liberar Refeição (CPT)');
+        botao.disabled = false;
+        botao.innerHTML = 'Liberar Refeição';
     }
 }
