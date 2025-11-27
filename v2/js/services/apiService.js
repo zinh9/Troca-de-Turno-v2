@@ -64,6 +64,10 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_prontidao.asp`;
 
+            for (let [key, value] of formData.entries()) {
+                console.log(`FormData - ${key}: ${value}`);
+            }
+
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -93,9 +97,6 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_update_just_apresentacao.asp`;
 
-            // for (let [key, value] of formData.entries()) {
-            //     console.log(`FormData - ${key}: ${value}`);
-            // }
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -174,6 +175,10 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_escolha_lanche.asp`
 
+            for (let [key, value] of formData.entries()) {
+                console.log(`FormData - ${key}: ${value}`);
+            }
+
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -183,6 +188,7 @@ export const api = {
             });
 
             const dados = await response.json();
+            console.log(dados);
             return dados;
         } catch (error) {
             console.error("Falha ao enviar dados Escolha: ", error);
@@ -231,6 +237,8 @@ export const api = {
     postLancheCPT: async (formData) => {
         try {
             const url = `${API_BASE_URL}post_lanche_cpt.asp`;
+
+            
     
             const response = await fetch(url, { method: 'POST', body: formData, });
             
