@@ -27,7 +27,7 @@ dim statusApresentacao, sqlInsert, sqlUpdateTurno
 ' supervisao =  "PV_AB" 
 ' local = "Aroaba" 
 ' confirmadoSupervisao = "1" 
-' confirmadoTurno = "1" 
+' confirmadoTurno = "0" 
 
 matricula = request.form("matricula")
 supervisao =  request.form("supervisao")
@@ -72,7 +72,7 @@ set rsCount = conn.execute(sql)
 
 if not rsCount.eof then
     if rsCount("total") <> 0 then
-        message = "Funcionário já cadastrado no turno atual."
+        message = "Funcionário já apresentado no turno atual."
         code = "ERROR_DUPLICATE"
     
         ResponseWriteJSON success, code, message, horarioApresentacao, status
@@ -136,8 +136,8 @@ end if
 rsRef.close
 
 
-sqlInsert = "INSERT INTO registros_apresentacao (usuario_dss, data_hora_apresentacao, supervisao_ra, local_trabalho_ra, supervisao_original_ra) " & _
-"VALUES ('" & matricula & "', Now(), '" & supervisao & "', '" & local & "', '" & supervisaoOriginal & "')"
+sqlInsert = "INSERT INTO registros_apresentacao (usuario_dss, data_hora_apresentacao, supervisao_ra, local_trabalho_ra, supervisao_original_ra, status_apresentacao) " & _
+"VALUES ('" & matricula & "', Now(), '" & supervisao & "', '" & local & "', '" & supervisaoOriginal & "', '" & statusApresentacao & "')"
 conn.execute(sqlInsert)
 
 horarioApresentacao = horarioRegistro
