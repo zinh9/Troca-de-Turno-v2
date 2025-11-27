@@ -92,9 +92,11 @@ function habilitarApresentacao() {
                 </div>
             </div>
             <div class="col-md-auto ms-auto">
-                <button type="button" class="btn btn-secondary">
-                    <i class="fas fa-bars"></i> Menu
-                </button>
+                <a href="default.html">
+                    <button type="button" class="btn btn-secondary">
+                        <i class="fas fa-bars"></i> Menu
+                    </button>
+                </a>
             </div>
         </div>
     `;
@@ -157,18 +159,17 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         const refeicaoStatus = emp.refeicaoStatus;
 
         let apresentacaoHtml = '';
-        if (statusApresentacao === 'OK' || (emp.apresentacao && !emp.justificativaApresentacao || emp.justificativaApresentacao === '')) {
+        if (statusApresentacao === 'OK') {
             apresentacaoHtml =`<span class="text-white">${emp.apresentacao}</span>`;
-        } else if (statusApresentacao === 'JUSTIFICATIVA_OK' || (emp.apresentacao && emp.justificativaApresentacao)) {
+        } else if (statusApresentacao === 'JUSTIFICATIVA_OK') {
             apresentacaoHtml =  `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
-        } else if (statusApresentacao === 'JUSTIFICAR' || (emp.apresentacao && !emp.justificativaApresentacao)) {
+        } else if (statusApresentacao === 'JUSTIFICAR') {
             apresentacaoHtml = renderizarFormJustificativaApresentacao(emp.matricula);
         }
 
         let prontidaoHtml = 'Aguardando...';
-        // O timer de prontidão SÓ aparece para o usuário ATIVO (do localStorage)
-        if (!emp.prontidao) { // Ver com o cabeça para adicionar (&& statusApresentacao !== 'JUSTIFICAR')
-            prontidaoHtml = `<div class="prontidao-dinamica-container" data-matricula="${emp.matricula}" data-horario-apresentacao="${emp.dataHoraApresentacaoCompleta}"></div>`;
+        if (!emp.prontidao || emp.prontidao === '') {
+            prontidaoHtml = `<div class="prontidao-dinamica-container" data-matricula="${emp.matricula}" data-horario-apresentacao="${emp.dataHoraApresentacaoCompleta}" data-turno="${emp.turno}"></div>`;
         } else if (emp.statusProntidao === 'Pronto com atraso') {
             prontidaoHtml = `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidao}">${emp.prontidao}</span>`
         } else if (emp.statusProntidao === 'Pronto') {
@@ -176,12 +177,14 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         }
 
         let lancheHtml = '--:--';
-        if (lancheStatus && lancheStatus === 'HABILITAR_ESCOLHA') {
+        if (lancheStatus && lancheStatus.startsWith('HABILITAR_ESCOLHA')) {
             lancheHtml = renderizarEscolhaLanche(emp.matricula);
         } else if (lancheStatus && lancheStatus.startsWith('TIMER_LANCHE.')) {
             lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split('.')[1]}"></div>`;
         } else if (lancheStatus && lancheStatus.startsWith('ACAO_')) {
             lancheHtml = `<button class="btn btn-success btn-sm btn-lanche" data-matricula="${emp.matricula}">Solicitar Lanche</button>`;
+        } else if (lancheStatus && lancheStatus === 'AGUARDANDO_REFEICAO') {
+            lancheHtml = `<button class="btn btn-sm btn-success btn-lanche-cpt" disabled>Solicitar Lanche</button>`;
         } else {
             lancheHtml = `<span class="text-warning">${emp.lancheStatus}</span>`;
         }
@@ -221,31 +224,33 @@ function montarLinhasTabela(empregados, horarioReferencia) {
 
 function renderizarFormJustificativaApresentacao(matricula) {
     return `
-    <form id="formJustificativaApresentacao">
-        <input type="hidden" name="matricula" value="${matricula}">
-        <div class="input-group input-group-sm">
-            <select name="justificativaApresentacao" class="form-select form-select-sm"> 
-                <option value="">Justificativa…</option>
-                <option value="Atraso chegada 1º ônibus">Atraso chegada 1º ônibus</option>
-                <option value="Atraso chegada 2º ônibus">Atraso chegada 2º ônibus</option>
-                <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-                <option value="DSS com Supervisor">DSS com Supervisor</option>
-                <option value="Desatento/Distração">Desatento/Distração</option>
-                <option value="Necessidade Pessoal">Necessidade Pessoal</option>
-                <option value="PM - Exame Periódico">PM - Exame Periódico</option>
-                <option value="PM - Exame de Retorno">PM - Exame de Retorno</option>
-                <option value="Atraso do Táxi">Atraso do Táxi</option>
-                <option value="Totem Ocupado">Totem Ocupado</option>
-                <option value="Horário ADM">Horário ADM</option>
-                <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
-                <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso ao Posto de Trabalho</option>" & _
-                <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
-            </select>
-            <button type="submit" class="btn btn-danger btn-sm">
-                <i class="fas fa-paper-plane"></i>
-            </button>
-        </div>
-    </form>
+        <center>
+            <form id="formJustificativaApresentacao">
+                <input type="hidden" name="matricula" value="${matricula}">
+                <div class="input-group input-group-sm w-75">
+                    <select name="justificativaApresentacao" class="form-select form-select-sm"> 
+                        <option value="">Justificativa…</option>
+                        <option value="Atraso chegada 1º ônibus">Atraso chegada 1º ônibus</option>
+                        <option value="Atraso chegada 2º ônibus">Atraso chegada 2º ônibus</option>
+                        <option value="DSS com Inspetoria">DSS com Inspetoria</option>
+                        <option value="DSS com Supervisor">DSS com Supervisor</option>
+                        <option value="Desatento/Distração">Desatento/Distração</option>
+                        <option value="Necessidade Pessoal">Necessidade Pessoal</option>
+                        <option value="PM - Exame Periódico">PM - Exame Periódico</option>
+                        <option value="PM - Exame de Retorno">PM - Exame de Retorno</option>
+                        <option value="Atraso do Táxi">Atraso do Táxi</option>
+                        <option value="Totem Ocupado">Totem Ocupado</option>
+                        <option value="Horário ADM">Horário ADM</option>
+                        <option value="Manifestações de Terceiros">Manifestações de Terceiros</option>
+                        <option value="Obstrução de Acesso ao Posto de Trabalho">Obstrução de Acesso ao Posto de Trabalho</option>" & _
+                        <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+                    </select>
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </form>
+        </center>
     `;
 }
 
@@ -257,7 +262,7 @@ function renderizarFormFimJornada(matricula, estaAtrasado) {
     <center>
         <form id="formFimJornada">
             <input type="hidden" name="matricula" value="${matricula}">
-            <div class="justificativas-fimJornada-container mb-2 input-group" style="display: ${displayJustificativa};">
+            <div class="justificativas-fimJornada-container mb-2 input-group input-group-sm w-75" style="display: ${displayJustificativa};">
                 <select name="justificativaFimJornada" class="form-select form-select-sm" ${estaAtrasado ? 'required' : ''}> 
                     <option value="">Justificativa...</option>
                     <option value="Permanência pós jornada atribuída ao CCP">Permanência pós jornada atribuída ao CCP</option>
@@ -304,78 +309,6 @@ function renderizarEscolhaLanche(matricula) {
     `;
 }
 
-// function habilitarProntidao(containerAcoes, matricula, horarioApresentacao) {
-//     if (!containerAcoes) return;
-//     if (containerAcoes.innerHTML.includes('formProntidao')) return;
-    
-//     const horaInicio = new Date(horarioApresentacao);
-//     if (intervaloTimerProntidao) clearInterval(intervaloTimerProntidao);
-
-//     containerAcoes.innerHTML = `
-//         <div id="prontidao-message" class="fs-5 text-center"></div>
-//         <form id="formProntidao">
-//             <input type="hidden" name="matricula" value="${matricula}">
-//             <div id="justificativas-prontidao-container" class="mb-2 input-group" style="display: none;">
-//                 <select name="justificativaProntidao" id="justificativaProntidao" class="form-select form-select-sm" required> 
-//                     <option value="">Justificativa…</option>
-//                     <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-//                     <option value="DSS com Supervisor">DSS com Supervisor</option>
-//                     <option value="Totem Ocupado">Totem Ocupado</option>
-//                     <option value="Falta de EPI">Falta de EPI</option>
-//                     <option value="Indisponibilidade DSS">Indisponibilidade DSS</option>
-//                     <option value="Necessidade Pessoal">Necessidade Pessoal</option>
-//                     <option value="Perda no TAC">Perda no TAC</option>
-//                     <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
-//                 </select>
-//                 <button type="submit" class="btn btn-danger btn-sm">
-//                     <i class="fas fa-paper-plane"></i>
-//                 </button>
-//             </div>
-//             <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm" style="display: none;">
-//                 Pronto
-//             </button>
-//         </form>
-//     `;
-
-//     const atualizarTimerProntidao = () => {
-//         const agora = new Date();
-//         const diffSegundos = Math.floor((agora - horaInicio) / 1000);
-
-//         const displayMessage = containerAcoes.querySelector('#prontidao-message');
-//         const botao = containerAcoes.querySelector('#botaoProntidao');
-//         const containerJustificativa = containerAcoes.querySelector('#justificativas-prontidao-container');
-
-//         if (!displayMessage || !botao || !containerJustificativa) {
-//             clearInterval(intervaloTimerProntidao);
-//             return;
-//         }
-
-//         if (diffSegundos <= 300) { 
-//             displayMessage.style.display = 'block';
-//             displayMessage.innerHTML = 'Faça sua <span class="text-warning"><strong>Boa Jornada</strong></span>, assine o <span class="text-warning"><strong>DSS</strong></span> e realize o <span class="text-warning"><strong>TAC</strong></span>';
-//             botao.style.display = 'none';
-//             containerJustificativa.style.display = 'none';
-//         } else if (diffSegundos <= 900) { 
-//             displayMessage.style.display = 'none';
-//             botao.style.display = 'block';
-//             botao.className = 'btn btn-success btn-sm w-100';
-//             botao.innerHTML = 'Pronto';
-//             containerJustificativa.style.display = 'none';
-//             const select = document.getElementById('justificativaProntidao');
-//             if (select) select.required = false;
-//         } else {
-//             displayMessage.style.display = 'none';
-//             botao.style.display = 'none';
-//             containerJustificativa.style.display = 'flex';
-//             const select = document.getElementById('justificativaProntidao');
-//             if (select) select.required = true;
-//         }
-//     };
-
-//     atualizarTimerProntidao();
-//     intervaloTimerProntidao = setInterval(atualizarTimerProntidao, 1000);
-// }
-
 function atualizarTimers() {
     const containerProntidao = document.querySelectorAll('.prontidao-dinamica-container');
 
@@ -390,29 +323,32 @@ function atualizarTimers() {
         // Se o timer ainda não foi renderizado, cria o HTML
         if (!container.innerHTML.includes('formProntidao')) {
             container.innerHTML = `
-                <div id="prontidao-message" class="fs-5 text-center"></div>
-                <form id="formProntidao">
-                    <input type="hidden" name="matricula" value="${matricula}">
-                    <div id="justificativas-prontidao-container" class="mb-2 input-group" style="display: none;">
-                        <select name="justificativaProntidao" id="justificativaProntidao" class="form-select form-select-sm" required> 
-                            <option value="">Justificativa…</option>
-                            <option value="DSS com Inspetoria">DSS com Inspetoria</option>
-                            <option value="DSS com Supervisor">DSS com Supervisor</option>
-                            <option value="Totem Ocupado">Totem Ocupado</option>
-                            <option value="Falta de EPI">Falta de EPI</option>
-                            <option value="Indisponibilidade DSS">Indisponibilidade DSS</option>
-                            <option value="Necessidade Pessoal">Necessidade Pessoal</option>
-                            <option value="Perda no TAC">Perda no TAC</option>
-                            <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
-                        </select>
-                        <button type="submit" class="btn btn-danger btn-sm">
-                            <i class="fas fa-paper-plane"></i>
+                <center>
+                    <div id="prontidao-message" class="fs-5 text-center"></div>
+                    <form id="formProntidao">
+                        <input type="hidden" name="matricula" value="${container.dataset.matricula}">
+                        <input type="hidden" name="turno" value="${container.dataset.turno}">
+                        <div id="justificativas-prontidao-container" class="mb-2 input-group input-group-sm w-75" style="display: none;">
+                            <select name="justificativaProntidao" id="justificativaProntidao" class="form-select form-select-sm" required> 
+                                <option value="">Justificativa…</option>
+                                <option value="DSS com Inspetoria">DSS com Inspetoria</option>
+                                <option value="DSS com Supervisor">DSS com Supervisor</option>
+                                <option value="Totem Ocupado">Totem Ocupado</option>
+                                <option value="Falta de EPI">Falta de EPI</option>
+                                <option value="Indisponibilidade DSS">Indisponibilidade DSS</option>
+                                <option value="Necessidade Pessoal">Necessidade Pessoal</option>
+                                <option value="Perda no TAC">Perda no TAC</option>
+                                <option value="Teste ou Instrução de uso">Teste ou Instrução de uso</option>
+                            </select>
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm" style="display: none;">
+                            Pronto
                         </button>
-                    </div>
-                    <button type="submit" id="botaoProntidao" class="btn btn-success btn-sm" style="display: none;">
-                        Pronto
-                    </button>
-                </form>
+                    </form>
+                </center>
             `;
         }
 
@@ -432,7 +368,7 @@ function atualizarTimers() {
         } else if (diffSegundos <= 900) { // 15 min
             displayMessage.style.display = 'none';
             botao.style.display = 'block';
-            botao.className = 'btn btn-success btn-sm w-100';
+            botao.className = 'btn btn-success btn-sm w-50';
             botao.innerHTML = 'Pronto';
             containerJustificativa.style.display = 'none';
             const select = container.querySelector('#justificativaProntidao');
@@ -463,9 +399,6 @@ function atualizarTimers() {
 
 // --- MANIPULADORES DE EVENTOS (EVENT HANDLERS) ---
 
-/**
- * Vincula todos os listeners dos formulários dinâmicos da tabela.
- */
 function listenersDinamicos() {
     const tbody = document.getElementById('tabelaApresentacoes');
 
@@ -507,9 +440,6 @@ function listenersDinamicos() {
     });
 }
 
-/**
- * Handler: Envio do formulário principal de Apresentação (Regra 1)
- */
 async function aoEnviarApresentacao(evento) {
     evento.preventDefault();
     const form = evento.target;
@@ -525,9 +455,6 @@ async function aoEnviarApresentacao(evento) {
     await processarRespostaApresentacao(result, formData);
 }
 
-/**
- * Handler: Processa a resposta da API de Apresentação (Regra 1)
- */
 async function processarRespostaApresentacao(result, formData) {
     const botao = document.getElementById("botaoApresentar");
     const msgContainer = document.getElementById("form-message");
@@ -599,19 +526,6 @@ async function aoEnviarJustificativaApresentacao(evento) {
     }
 }
 
-/**
- * Helper: Atualiza o localStorage após justificar o atraso
- */
-// function aoJustificativaApresentacaoOK() {
-//     if (empregadoAtivoLocal) {
-//         empregadoAtivoLocal.statusApresentacao = 'JUSTIFICATIVA_OK';
-//     }
-//     carregarEMontarTabela();
-// }
-
-/**
- * Handler: Envio do formulário de Prontidão (Regra 3)
- */
 async function aoEnviarProntidao(evento) {
     evento.preventDefault();
     const form = evento.target;
@@ -636,7 +550,7 @@ async function aoEnviarProntidao(evento) {
     if (containerMessage) containerMessage.innerHTML = '';
 
     const result = await api.postProntidao(dadosForm);
-
+    console.log(result, result.success)
     if (result.success === true) {
         if (containerMessage) containerMessage.innerHTML = `<span class="text-success">Prontidão registrada!</span>`;
         setTimeout(() => {
@@ -683,11 +597,12 @@ async function aoEnviarEscolhaIntervalo(botao, select, matricula) {
     formData.append('matricula', matricula);
     formData.append('escolhaIntervalo', valor);
 
-    const result = api.postEscolhaIntervalo(formData);
-
-    if (result.success) {
+    const result = await api.postEscolhaIntervalo(formData);
+    console.log(result, result.success);
+    if (result.success === true) {
         await carregarEMontarTabela();
     } else {
+        console.log("Entrei aqyu")
         alert(result.message || 'Erro ao registrar Escolha');
         select.disabled = false;
         botao.disabled = false;
@@ -756,4 +671,3 @@ async function aoEnviarFimJornada(evento) {
         if (select) select.disabled = false;
     }
 }
-
