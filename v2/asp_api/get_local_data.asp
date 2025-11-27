@@ -52,10 +52,10 @@ sqlCounts = "SELECT " & _
     "  ra_inner.local_trabalho_ra, " & _
     "  COUNT(*) AS totalNoLocal, " & _
     "  SUM(IIF(ra_inner.data_hora_lanche_patio IS NOT NULL AND Hour(ra_inner.data_hora_lanche_patio) < 12, 1, 0)) AS lancheManhaCount, " & _
-    "  SUM(IIF(ra_inner.escolha_lanche_intervalo = 'CEDO', 1, 0)) AS lancheEscolhaCedoCount " & _
+    "  SUM(IIF(ra_inner.escolha_lanche_intervalo IS NOT NULL, 1, 0)) AS lancheEscolhaCount " & _
     "FROM registros_apresentacao AS ra_inner " & _
     "WHERE DateValue(ra_inner.data_hora_apresentacao) >= Date() - 1 " & _
-    "  AND Now() <= DateAdd('n', 870, ra_inner.data_hora_apresentacao) "
+    "  AND Now() <= DateAdd('n', 780, ra_inner.data_hora_apresentacao) "
 
 If qsSup <> "" Then
     sqlCounts = sqlCounts & "AND ra_inner.supervisao_ra = '" & qsSup & "' "
@@ -71,14 +71,17 @@ sqlTabela = _
 "  ra.local_trabalho_ra AS local, " & _
 "  ld.horario_login_dss AS turno, " & _
 "  Format(ra.data_hora_apresentacao, 'hh:nn') AS apresentacao, " & _
+"  ra.status_apresentacao, " & _
 "  ra.data_hora_apresentacao AS dataHoraApresentacaoCompleta, " & _
 "  ra.justificativa_atraso_apresentacao AS justificativaApresentacao, " & _
 "  Format(ra.data_hora_prontidao_ra, 'hh:nn') AS prontidao, " & _
 "  ra.status_funcionario AS statusProntidao, " & _
 "  ra.justificativa_atraso_prontidao AS justificativaProntidao, " & _
 "  ra.data_hora_lanche_patio AS lanche, " & _
+"  Format(ra.data_hora_lanche_CPT, 'hh:nn') AS lancheCPT, " & _
 "  ra.escolha_lanche_intervalo AS intervaloLanche, " & _
 "  ra.data_hora_refeicao_patio AS refeicao, " & _
+"  Format(ra.data_hora_refeicao_CPT, 'hh:nn') AS refeicaoCPT, " & _
 "  Format(ra.fim_jornada, 'hh:nn') AS fimJornada, " & _
 "  ra.justificativa_atraso_fim_jornada AS justificativaFimJornada, " & _
 "  ra.chamada_CPT, " & _
@@ -87,13 +90,13 @@ sqlTabela = _
 "  IIF(ld.JOB_DESC='OFICIAL OPERACAO FERROVIARIA' OR ld.JOB_DESC='OFICIAL OP FERROV FORM PROFIS', 'OOF', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV ESP', 'INSPETOR ESP', IIF(ld.JOB_DESC='MAQUINISTA PATIO' OR ld.JOB_DESC='MAQUINISTA', 'MAQ', IIF(ld.JOB_DESC='TECNICO OPERACAO FERROVIARIA', 'TOF', IIF(ld.JOB_DESC='TRAINEE OPERACIONAL', 'TRAINEE', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV I', 'INSPETOR I', IIF(ld.JOB_DESC='INSPETOR ORIENT OP FERROV II', 'INSPETOR II', IIF(ld.JOB_DESC='OPERADOR LOCOMOTIVA REMOTO I', 'MAQ REMOTO I', IIF(ld.JOB_DESC='OPERADOR LOCOMOTIVA REMOTO II', 'MAQ REMOTO II', IIF(ld.JOB_DESC='TECNICO OPERACAO', 'TO', ld.JOB_DESC)))))))))) AS cargo, " & _
 "  Counts.totalNoLocal, " & _
 "  Counts.lancheManhaCount, " & _
-"  Counts.lancheEscolhaCedoCount, " & _
+"  Counts.lancheEscolhaCount, " & _
 "  CInt(IIF(Counts.totalNoLocal Mod 2 = 0, Counts.totalNoLocal / 2, (Counts.totalNoLocal - 1) / 2 + 1)) AS metadeTurma " & _
 "FROM (registros_apresentacao AS ra " & _
 "LEFT JOIN login_dss AS ld ON ra.usuario_dss = ld.usuario_dss) " & _
 "LEFT JOIN (" & sqlCounts & ") AS Counts ON ra.local_trabalho_ra = Counts.local_trabalho_ra " & _
 "WHERE ra.data_hora_apresentacao >= Date() - 1 " & _
-"  AND Now() <= DateAdd('n', 870, ra.data_hora_apresentacao) "
+"  AND Now() <= DateAdd('n', 780, ra.data_hora_apresentacao) "
 
 If qsSup <> "" Then
     sqlTabela = sqlTabela & "AND ra.supervisao_ra = '" & qsSup & "' "
@@ -103,11 +106,11 @@ If qsLoc <> "" Then
     sqlTabela = sqlTabela & "AND ra.local_trabalho_ra = '" & qsLoc & "' "
 End If
 
-
 ' Concatenar com o SQL para trazer o registro mais recente
 sqlTabela = sqlTabela & "ORDER BY ra.data_hora_apresentacao DESC;"
 
 'response.write sqlTabela
+' response.write 
 
 set rsTabela = conn.execute(sqlTabela)
 
