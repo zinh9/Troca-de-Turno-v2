@@ -1,5 +1,6 @@
 import { viewLocal } from './views/viewLocal.js'
 import { viewCCP } from './views/viewCCP.js';
+import { manutencao } from './views/manutencao.js';
 
 function app() {
     const params = new URLSearchParams(window.location.search);
@@ -21,6 +22,8 @@ function app() {
             <p class="text-white">Por favor, acesse usando uma URL válida!</p>
         `;
     }
+
+    // manutencao.init();
 }
 
 function setHeaderLayout(layoutParam) {
