@@ -1,4 +1,4 @@
-<%@ Language=VBScript %>
+﻿<%@ Language=VBScript %>
 <!--#include file='includes/conexao.asp'-->
 <!--#include file='includes/utils.asp'-->
 <%

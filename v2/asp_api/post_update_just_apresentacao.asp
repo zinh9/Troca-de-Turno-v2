@@ -28,7 +28,8 @@ on error resume next
 set conn = getConexao()
 
 sql = "UPDATE registros_apresentacao SET " & _
-"justificativa_atraso_apresentacao = '" & justificativa & "' " & _
+"justificativa_atraso_apresentacao = '" & justificativa & "', " & _
+"status_apresentacao = 'JUSTIFICATIVA_OK' " & _
 "WHERE usuario_dss = '" & matricula & "' " & _
 "AND DateValue(data_hora_apresentacao) = Date()"
 conn.execute(sql)

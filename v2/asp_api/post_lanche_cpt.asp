@@ -25,7 +25,7 @@ on error resume next
 set conn = getConexao()
 
 sql = "UPDATE registros_apresentacao SET " & _
-"data_hora_lanche_patio_CPT = Now() " & _
+"data_hora_lanche_CPT = Now() " & _
 "WHERE usuario_dss = '" & matricula & "' " & _
 "AND (DateValue(data_hora_apresentacao) = Date() OR DateValue(data_hora_apresentacao) = Date() - 1)"
 
