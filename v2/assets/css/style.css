@@ -2,6 +2,19 @@
     font-family: 'Oswald', sans-serif;
 }
 
+.bg {
+    background-color: rgb(80, 80, 80);
+}
+
+.map-container {
+    background: url('mapa-efvm.png') no-repeat center top;
+    background-size: cover;
+    /* ou cover, dependendo do efeito desejado */
+    width: 100%;
+    height: 86vh;
+    /* Ajuste conforme necessário */
+}
+
 .border-rounded {
     border-collapse: separete;
     border-spacing: 0;
@@ -45,6 +58,26 @@
     100% {
         transform: scale(1);
     }
+}
+
+.ta {
+    background-color: #007E7A;
+}
+
+.tb {
+    background-color: #EE6F16;
+}
+
+.tc {
+    background-color: #ECB11F;
+}
+
+.tl {
+    background-color: #0ABB98;
+}
+
+.vpn {
+    background-color: #3CB5E5;
 }
 
 .g7 {
