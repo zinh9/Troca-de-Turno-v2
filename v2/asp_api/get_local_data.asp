@@ -17,6 +17,14 @@ dim sqlInfo, sqlTabela
 dim fso, jsonTabela, jsonInfo
 set fso = server.CreateObject("Scripting.FileSystemObject")
 
+dim emManutencao, caminho
+caminho = server.mappath("manutencao.txt")
+
+if fso.FileExists(caminho) then
+    response.write "{""success"":true, ""info"": { ""emManutencao"": true }, ""empregados"": []}"
+    response.end
+end if
+
 qsSup = request.querystring("sup")
 qsLoc = request.querystring("loc")
 
@@ -80,8 +88,10 @@ sqlTabela = _
 "  ra.data_hora_lanche_patio AS lanche, " & _
 "  Format(ra.data_hora_lanche_CPT, 'hh:nn') AS lancheCPT, " & _
 "  ra.escolha_lanche_intervalo AS intervaloLanche, " & _
+"  ra.justificativa_atraso_lanche AS justificativaLanche, " & _
 "  ra.data_hora_refeicao_patio AS refeicao, " & _
 "  Format(ra.data_hora_refeicao_CPT, 'hh:nn') AS refeicaoCPT, " & _
+"  ra.justificativa_atraso_refeicao AS justificativaRefeicao, " & _
 "  Format(ra.fim_jornada, 'hh:nn') AS fimJornada, " & _
 "  ra.justificativa_atraso_fim_jornada AS justificativaFimJornada, " & _
 "  ra.chamada_CPT, " & _

@@ -10,12 +10,14 @@ response.cachecontrol = "no-cache"
 response.addheader "Pragma", "no-cache"
 response.expires = -1
 
-dim matricula, conn, sql, rs, success, message, code, horarioAgora
+dim matricula, horarioAgora, justificativa
+dim conn, sql, rs, success, message, code
 
 matricula = request.form("matricula")
+justificativa = request.form("justificativaLanchaRefeicao")
 
-' matricula = "81053394"
-' justificativa = null
+' matricula = "01004879"
+' justificativa = "teste"
 
 success = "false"
 message = ""
@@ -25,11 +27,20 @@ horarioAgora = now()
 on error resume next
 set conn = getConexao()
 
-sql = "UPDATE registros_apresentacao SET " & _
-"data_hora_lanche_patio = Now() " & _
-"WHERE usuario_dss = '" & matricula & "' " & _
-"AND fim_jornada IS NULL " & _
-"AND (DateValue(data_hora_apresentacao) = Date() OR DateValue(data_hora_apresentacao) = Date() - 1)"
+if justificativa <> "" or not isnull(justificativa) then
+    sql = "UPDATE registros_apresentacao SET " & _
+        "data_hora_lanche_patio = Now(), " & _
+        "justificativa_atraso_lanche = '" & justificativa & "' " & _
+        "WHERE usuario_dss = '" & matricula & "' " & _
+        "AND fim_jornada IS NULL " & _
+        "AND (DateValue(data_hora_apresentacao) = Date() OR DateValue(data_hora_apresentacao) = Date() - 1)"
+else
+    sql = "UPDATE registros_apresentacao SET " & _
+    "data_hora_lanche_patio = Now() " & _
+    "WHERE usuario_dss = '" & matricula & "' " & _
+    "AND fim_jornada IS NULL " & _
+    "AND (DateValue(data_hora_apresentacao) = Date() OR DateValue(data_hora_apresentacao) = Date() - 1)"
+end if
 
 conn.execute(sql)
 
