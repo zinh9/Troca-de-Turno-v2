@@ -1,6 +1,12 @@
-import { viewLocal } from './views/viewLocal.js'
+﻿import { viewLocal } from './views/viewLocal.js'
 import { viewCCP } from './views/viewCCP.js';
-import { manutencao } from './views/manutencao.js';
+
+// para que serve
+// tantas linhas de códigos
+// se a vida 
+// não é programada
+// e as melhores coisas
+// não tem lógica
 
 function app() {
     const params = new URLSearchParams(window.location.search);
@@ -22,8 +28,6 @@ function app() {
             <p class="text-white">Por favor, acesse usando uma URL válida!</p>
         `;
     }
-
-    // manutencao.init();
 }
 
 function setHeaderLayout(layoutParam) {
