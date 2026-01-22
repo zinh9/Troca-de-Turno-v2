@@ -1,4 +1,4 @@
-<!--#include file='conexao.asp' -->
+﻿<!--#include file='conexao.asp' -->
 <%
 
 sub ResponseWriteJSON(success, code, message, horarioApresentacao, status)
@@ -17,12 +17,44 @@ function buildJSONInfo(nome, att, ref)
     str = "{"
     str = str & " ""nomeFormatado"":""" & EscapeJSON(nome) & ""","
     str = str & " ""ultimaAtualizacao"":""" & EscapeJSON(att) & ""","
-    str = str & " ""horarioReferencia"":""" & EscapeJSON(ref) & """"
+    str = str & " ""horarioReferencia"":""" & EscapeJSON(ref) & ""","
+    str = str & " ""emManutencao"": false"
     str = str & " }"
     buildJSONInfo = str
 end function
 
-' [SUBSTITUA ISTO no seu utils.asp]
+function buildJSONHistorico(rs)
+    if rs is nothing then
+        buildJSONHistorico = "{}"
+        exit function
+    end if
+
+    dim rows(), rowParts(), field, iRow, iField
+    iRow = 0
+
+    do until rs.EOF
+        redim rowParts(rs.Fields.Count - 1)
+        iField = 0
+        for each field in rs.Fields
+            rowParts(iField) = """" & field.Name & """:""" & EscapeJSON(field.Value) & """"
+            iField = iField + 1
+        next
+
+        if iRow = 0 then
+            redim rows(0)
+        else
+            redim Preserve rows(iRow)
+        end if
+        rows(iRow) = "{" & Join(rowParts, ",") & "}"
+
+        iRow = iRow + 1
+        rs.MoveNext
+    loop
+
+    buildJSONHistorico = Join(rows, ",")
+
+end function
+
 function buildJSONTabela(rs)
     dim str, count
     str = "["
@@ -50,8 +82,16 @@ function buildJSONTabela(rs)
             str = str & " ""statusProntidao"":""" & rs("statusProntidao") & ""","
             str = str & " ""justificativaProntidao"":""" & EscapeJSON(rs("justificativaProntidao")) & ""","
             str = str & " ""lancheStatus"":""" & EscapeJSON(lancheStatus) & ""","
+            str = str & " ""lanche"":""" & EscapeJSON(rs("lanche")) & ""","
+            str = str & " ""horaLanche"":""" & EscapeJSON(rs("horaLanche")) & ""","
+            str = str & " ""justificativaProntidaoLanche"":""" & EscapeJSON(rs("justificativaProntidaoLanche")) & ""","
+            str = str & " ""prontidaoLanche"":""" & EscapeJSON(rs("prontidaoLanche")) & ""","
             ' str = str & " ""intervaloLanche"":""" & EscapeJSON(rs("intervaloLanche")) & ""","
             str = str & " ""refeicaoStatus"":""" & EscapeJSON(refeicaoStatus) & ""","
+            str = str & " ""refeicao"":""" & EscapeJSON(rs("refeicao")) & ""","
+            str = str & " ""horaRefeicao"":""" & EscapeJSON(rs("horaRefeicao")) & ""","
+            str = str & " ""justificativaProntidaoRefeicao"":""" & EscapeJSON(rs("justificativaProntidaoRefeicao")) & ""","
+            str = str & " ""prontidaoRefeicao"":""" & EscapeJSON(rs("prontidaoRefeicao")) & ""","
             str = str & " ""lancheCPT"":""" & EscapeJSON(rs("lancheCPT")) & ""","
             str = str & " ""refeicaoCPT"":""" & EscapeJSON(rs("refeicaoCPT")) & ""","
             str = str & " ""statusFimJornada"":" & lcase(rs("statusFimJornada")) & ","
@@ -78,7 +118,8 @@ function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount
 
     dim agora
     agora = time()
-    GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+    message = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+    GetLancheStatus = message
 
     select case turno
         case "05x17", "06x18"
@@ -101,12 +142,16 @@ function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount
                     else
                         GetLancheStatus = "ACAO_LANCHE_TARDE"
                     end if
+                elseif agora > timeserial(16, 30, 0) then
+                    GetLancheStatus = "Não solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
             elseif intervaloLanche = "CEDO" then
                 if agora <= timeserial(8, 0, 0) then
                     GetLancheStatus = "08:00 às 10:30"
                 elseif agora <= timeserial(10, 30, 0) then
                     GetLancheStatus = "ACAO_LANCHE_CEDO"
+                elseif agora > timeserial(10, 30, 0) then
+                    GetLancheStatus = "Não solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
             elseif intervaloLanche = "TARDE" then
                 if agora <= timeserial(14, 0, 0) then
@@ -121,31 +166,33 @@ function GetLancheStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCount
                     else
                         GetLancheStatus = "ACAO_LANCHE_TARDE"
                     end if
+                elseif agora > timeserial(16, 30, 0) then
+                    GetLancheStatus = "Não solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
             end if
-        case "12x00"
+        case "12x00", "13x01"
             if agora <= timeserial(14, 0, 0) then
                 GetLancheStatus = "14:00 às 17:00"
             elseif agora <= timeserial(16, 30, 0) then
                 GetLancheStatus = "ACAO_LANCHE_TARDE-14:00 às 16:30"
-            else
-                GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            elseif agora > timeserial(16, 30, 0) then
+                GetLancheStatus = "Não solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
         case "17x05"
             if agora >= timeserial(17, 0, 0) or agora <= timeserial(1, 0, 0) then
                 GetLancheStatus = "01:00 às 03:30"
             elseif agora <= timeserial(3, 30, 0) then
                 GetLancheStatus = "ACAO_LANCHE_MADRUGADA-01:00 às 03:30"
-            else
-                GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            elseif agora > timeserial(3, 30, 0) then
+                GetLancheStatus = "Não solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
         case "18x06" 
             if agora >= timeserial(17, 0, 0) or agora <= timeserial(2, 0, 0) then
                 GetLancheStatus = "02:00 às 04:30"
             elseif agora <= timeserial(4, 30, 0) then
                 GetLancheStatus = "ACAO_LANCHE_MADRUGADA-02:00 às 04:30"
-            else
-                GetLancheStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
+            elseif agora > timeserial(4, 30, 0) then
+                GetLancheStatus = "Não solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
             end if
     end select
 end function
@@ -186,7 +233,7 @@ function GetRefeicaoStatus(turno, lanche, refeicao, totalNoLocal, lancheManhaCou
                     GetRefeicaoStatus = "Não Solicitado <i class='fa-solid fa-triangle-exclamation'></i>"
                 end if
             end if
-        case "12x00"
+        case "12x00", "13x01"
             if agora <= timeserial(18, 30, 0) then
                 GetRefeicaoStatus = "19:00 às 21:00"
             elseif agora <= timeserial(21, 0, 0) then

@@ -6,7 +6,7 @@ Function getConexao()
 
         Set conn = Server.CreateObject("ADODB.Connection")
         strCN = "DRIVER={Microsoft Access Driver (*.mdb)};" &_
-                "DBQ=\\vtovmltrens\inetpub\wwwroot\trocadeturnodev\dssbd.mdb"
+                "DBQ=\\VTOVMLTRENS\inetpub\wwwroot\dss\dssbd.mdb"
         conn.Open strCN
         Set getConexao = conn
 
