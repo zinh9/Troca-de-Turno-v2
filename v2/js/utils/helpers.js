@@ -32,38 +32,90 @@ export function iniciarRelogio(iniciarMasterTick = false) {
     }
 }
 
+
 /**
  * @param {HTMLElement} elemento
  * @param {string} isoStartTime
  * @param {number} duracaoMinutos
+ * @param {string} justificativa
+ * @param {string|number} matricula
  */
-export function iniciarCronometro(elemento, isoStartTime, duracaoMinutos) {
-    const horaInicio = new Date(isoStartTime);
-    const horaFim = new Date(horaInicio.getTime() + duracaoMinutos * 60000);
+export function iniciarCronometro(elemento, isoStartTime, duracaoMinutos, matricula, layout) {
+    const horaInicio = new Date(isoStartTime); // pega a hora do start 
+    const fimBaseMs = horaInicio.getTime() + duracaoMinutos * 60000; // soma a duracao de minutos multiplicando por 60000
+    const TOLERANCIA_MS = 1 * 60000; // tolerancia de 5 minutos para prontidao
 
-    const intervaloAntigo = elemento.dataset.intervalId;
-    if (intervaloAntigo) {
-        clearInterval(intervaloAntigo);
+    const possuiTolerancia = duracaoMinutos === 60 || duracaoMinutos === 15;
+    const fimComToleranciaMs = possuiTolerancia ? fimBaseMs + TOLERANCIA_MS : fimBaseMs; // se tiver tolerancia soma o horario de fim + a tolerancia
+
+    const arrayTipoProntidao = {
+        15: "lanche",
+        60: "refeicao"
+    };
+    const tipo = arrayTipoProntidao[duracaoMinutos];
+
+    if (elemento.dataset.intervalId) {
+        clearInterval(Number(elemento.dataset.intervalId));
     }
 
-    const atualizarCronometro = () => {
-        const agora = new Date();
-        const restante = horaFim - agora;
+    const atualizarCronometro = () => { // cronometro de inicio
+        const agoraMs = Date.now(); // pega o horario de agora
+        const restanteBaseMs = fimBaseMs - agoraMs; // subtração de agora com o de fim
+        const restanteToleranciaMs = fimComToleranciaMs - agoraMs; // 
 
-        if (restante <= 0) {
-            const strInicio = horaInicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const strFim = horaFim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            elemento.innerHTML = `<span class="text-white">${strInicio}→</span><span class="text-warning chamada-alerta">${strFim}</span>`;
-        } else {
-            const minutos = Math.floor(restante / 60000);
-            const segundos = Math.floor((restante % 60000) / 1000);
+        const strInicio = horaInicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const strFim = new Date(fimBaseMs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        if (restanteBaseMs > 0) {
+            const minutos = Math.floor(restanteBaseMs / 60000);
+            const segundos = Math.floor((restanteBaseMs % 60000) / 1000);
             elemento.innerHTML = `<span class="text-warning fw-bold">${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}</span>`;
+            return;
+        }
+
+        if (possuiTolerancia) {
+            const estaAtrasado = restanteToleranciaMs < 0;
+            const displayJustificativa = estaAtrasado ? 'flex' : 'none';
+            const displayBotaoNormal = estaAtrasado ? 'none' : 'block';
+
+            if (layout === 'patio') {
+                elemento.innerHTML =  `
+                    <div class="d-flex align-items-center justify-content-center">
+                        <span class="text-white">${strInicio}→</span>
+                        <form id="formProntidaoLancheRefeicao">
+                            <input type="hidden" name="matricula" value="${matricula}">
+                            <input type="hidden" name="tipo" value="${tipo}">
+                            <div class="justificativas-lanche-refeicao-container input-group input-group-sm w-75" style="display: ${displayJustificativa};">
+                                <select name="justificativaLancheRefeicao" class="form-select form-select-sm select-compact" ${estaAtrasado ? 'required' : ''}>
+                                    <option value="">Justificativa...</option>
+                                    <option value="Atraso do Transporte">Atraso do transporte</option>
+                                    <option value="Atraso em apontar Prontidão">Atraso em apontar Prontidão</option>
+                                    <option value="Trajeto obstruído">Trajeto obstruído</option>
+                                    <option value="Atendimento ao Supervisor">Atendimento ao Supervisor</option>
+                                    <option value="Atendimento ao Inspetor">Atendimento ao Inspetor</option>
+                                </select>
+                                <button type="submit" class="btn btn-danger btn-sm" data-action="justificar">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                            <button class="btn-prontidao-lanche-refeicao btn btn-sm btn-warning" type="submit" data-action="pronto" style="display: ${displayBotaoNormal};">
+                                Pronto
+                            </button>
+                        </form>
+                    </div>
+                `;
+            } else if (layout === 'ccp') {
+                elemento.innerHTML = `<span class="text-white">${strInicio}→</span><span class="chamada-alerta">${strFim}</span>`;
+            }
+            if (elemento.dataset.intervalId) clearInterval(Number(elemento.dataset.intervalId));
+            return;
         }
     };
 
-    atualizarCronometro();
     const novoIntervalo = setInterval(atualizarCronometro, 1000);
-    elemento.dataset.intervalId = novoIntervalo;
+    elemento.dataset.intervalId = String(novoIntervalo);
+
+    atualizarCronometro();
 }
 
 export function iniciarCronometroManutencao() {
@@ -100,4 +152,23 @@ export function atualizarQueryString(pares) {
         else url.searchParams.set(k, v);
     });
     window.history.replaceState({}, '', url.toString());
+}
+
+export function renderJustificativaLancheRefeicao(matricula, tipo) {
+    return `
+        <form id="formJustificativaProntidaoLancheRefeicao" class="d-inline-flex align-items-center m-0">
+            <input type="hidden" name="matricula" value="${matricula}">
+            <input type="hidden" name="tipo" value="${tipo}">
+            <div class="input-group input-group-sm">
+                <select name="justificativaLancheRefeicao" class="form-select form-select-sm select-compact" title="">
+                    <option value="">Justificativa...</option>
+                    <option value="Falha CCP: não liberou no intervalo acordado">Falha CCP: não liberou no intervalo acordado</option>
+                    <option value="Falha Pátio: Não apontei o início e fim do intervalo">Falha Pátio: Não apontei o início e fim do intervalo</option>
+                </select>
+                <button type="submit" class="btn btn-danger btn-sm">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </form>
+    `;
 }
