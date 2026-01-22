@@ -10,7 +10,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}get_local_data.asp?sup=${supervisao}&loc=${local}`;
             const response = await fetch(url);
-
+                
             if (!response.ok) {
                 throw new Error(`Erro HTTP: ${response.status}`);
             }
@@ -31,6 +31,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_apresentacao.asp`;
 
+            viewFormData(formData);
             
 
             const response = await fetch(url, {
@@ -64,10 +65,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_prontidao.asp`;
 
-            for (let [key, value] of formData.entries()) {
-                console.log(`FormData - ${key}: ${value}`);
-            }
-
+            viewFormData(formData);
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -97,6 +95,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_update_just_apresentacao.asp`;
 
+            viewFormData(formData);
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -119,6 +118,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_fim_jornada.asp`;
 
+            viewFormData(formData);
             
 
             const response = await fetch(url, {
@@ -138,6 +138,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_chamada_CPT.asp`;
 
+            viewFormData(formData);
             const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
@@ -155,6 +156,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_lanche.asp`
 
+            viewFormData(formData);
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -175,10 +177,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_escolha_lanche.asp`
 
-            for (let [key, value] of formData.entries()) {
-                console.log(`FormData - ${key}: ${value}`);
-            }
-
+            viewFormData(formData);
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -200,6 +199,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_refeicao.asp`
 
+            viewFormData(formData);
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -220,7 +220,8 @@ export const api = {
     postFimJornadaCPT: async (formData) => {
         try {
             const url = `${API_BASE_URL}post_fim_jornada_CPT.asp`;
-            
+
+            viewFormData(formData);
             const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
@@ -238,6 +239,7 @@ export const api = {
         try {
             const url = `${API_BASE_URL}post_lanche_cpt.asp`;
 
+            viewFormData(formData);
             
     
             const response = await fetch(url, { method: 'POST', body: formData, });
@@ -255,7 +257,8 @@ export const api = {
     postRefeicaoCPT: async (formData) => {
         try {
             const url = `${API_BASE_URL}post_refeicao_cpt.asp`;
-    
+            
+            viewFormData(formData);
             const response = await fetch(url, { method: 'POST', body: formData, });
             
             if (!response.ok) throw new Error(`Error HTTP: ${response.message}`);
@@ -268,4 +271,28 @@ export const api = {
             return handleFetchError('postRefeicaoCPT', error);
         }
     },
+    postProntidaoLancheRefeicao: async (formData) => {
+        try {
+            const url = `${API_BASE_URL}post_prontidao_lanche_refeicao.asp`;
+
+            viewFormData(formData);
+
+            const response = await fetch(url, { method: 'POST', body: formData });
+
+            if (!response.ok) throw new Error(`Error HTTP: ${response.message}`);
+
+            const dados = await response.json();
+            return dados
+        } catch (error) {
+            console.error("Falha ao enviar dados Prontidao Lanche/Refeição: ", error);
+            alert("Erro na requisição de Prontidao Lanche/Refeição: ", error.message);
+            return handleFetchError('postProntidaoLancheRefeicao', error);
+        }
+    },
+}
+
+function viewFormData(form) {
+    for (let [key, value] of form.entries()) {
+        console.log(`FormData - ${key}: ${value}`);
+    }
 }
