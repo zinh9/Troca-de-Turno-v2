@@ -10,8 +10,12 @@ async function init() {
 }
 
 function montarLayout() {
+    const headerContainer = document.getElementById('page-header');
+    const actionsContainer = document.getElementById('page-actions');
     const contentContainer = document.getElementById('page-content');
 
+    headerContainer.innerHTML = '';
+    actionsContainer.innerHTML = ''
     contentContainer.innerHTML = `
         <center>
             <div class="maintenance-container">

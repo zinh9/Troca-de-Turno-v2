@@ -1,15 +1,18 @@
 import { api } from '../services/apiService.js';
-import { horaParaMinutos, iniciarRelogio, iniciarCronometro } from '../utils/helpers.js';
+import { horaParaMinutos, iniciarRelogio, iniciarCronometro, renderJustificativaLancheRefeicao } from '../utils/helpers.js';
+import { manutencao } from './manutencao.js';
 
 let supervisaoAtual = null;
 let localAtual = null;
 let intervaloPollingTabela = null;
+let estadoManutencaoAtivo = false;
+let layout = 'patio'
 
 // --- PONTO DE ENTRADA ---
 
 export const viewLocal = {
     init: init,
-    atualizarTimers: atualizarTimers 
+    atualizarTimers: atualizarTimers
 };
 
 async function init(supervisao, local) {
@@ -100,7 +103,7 @@ function habilitarApresentacao() {
             </div>
         </div>
     `;
-    
+
     const formInserir = document.getElementById('formInserir');
     if (formInserir) {
         formInserir.addEventListener('submit', aoEnviarApresentacao);
@@ -110,6 +113,22 @@ function habilitarApresentacao() {
 async function carregarEMontarTabela() {
     const dados = await api.getLocalData(supervisaoAtual, localAtual);
     console.log("Dados: ", dados);
+
+    if (dados && dados.info && dados.info.emManutencao === true) {
+        if (!estadoManutencaoAtivo) {
+            manutencao.init();
+            estadoManutencaoAtivo = true;
+        }
+        return;
+    }
+
+    if (estadoManutencaoAtivo && dados && dados.success) {
+        estadoManutencaoAtivo = false;
+
+        montarLayout();
+        habilitarApresentacao();
+        listenersDinamicos();
+    }
 
     if (dados && dados.success) {
         const ultimaEl = document.getElementById('ultima-atualizacao');
@@ -160,9 +179,9 @@ function montarLinhasTabela(empregados, horarioReferencia) {
 
         let apresentacaoHtml = '';
         if (statusApresentacao === 'OK') {
-            apresentacaoHtml =`<span class="text-white">${emp.apresentacao}</span>`;
+            apresentacaoHtml = `<span class="text-white">${emp.apresentacao}</span>`;
         } else if (statusApresentacao === 'JUSTIFICATIVA_OK') {
-            apresentacaoHtml =  `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
+            apresentacaoHtml = `<span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaApresentacao}">${emp.apresentacao}</span>`;
         } else if (statusApresentacao === 'JUSTIFICAR') {
             apresentacaoHtml = renderizarFormJustificativaApresentacao(emp.matricula);
         }
@@ -179,25 +198,34 @@ function montarLinhasTabela(empregados, horarioReferencia) {
         let lancheHtml = '--:--';
         if (lancheStatus && lancheStatus.startsWith('HABILITAR_ESCOLHA')) {
             lancheHtml = renderizarEscolhaLanche(emp.matricula);
+        } else if (emp.horaLanche && emp.prontidaoLanche && !emp.justificativaProntidaoLanche) {
+            lancheHtml = `<span class="text-white">${emp.horaLanche}→</span><span class="text-warning">${emp.prontidaoLanche}</span>`;
+        } else if (emp.horaLanche && emp.prontidaoLanche && emp.justificativaProntidaoLanche) {
+            lancheHtml = `<span class="text-white">${emp.horaLanche}→</span><span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidaoLanche}">${emp.prontidaoLanche}</span>`;
         } else if (lancheStatus && lancheStatus.startsWith('TIMER_LANCHE.')) {
-            lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split('.')[1]}"></div>`;
+            lancheHtml = `<div class="cronometro-lanche" data-starttime="${lancheStatus.split('.')[1]}" data-matricula="${emp.matricula}"></div>`;
         } else if (lancheStatus && lancheStatus.startsWith('ACAO_')) {
-            lancheHtml = `<button class="btn btn-success btn-sm btn-lanche" data-matricula="${emp.matricula}">Solicitar Lanche</button>`;
+            lancheHtml = `<button class="btn btn-success btn-sm btn-lanche" data-matricula="${emp.matricula}">Start Lanche</button>`;
         } else if (lancheStatus && lancheStatus === 'AGUARDANDO_REFEICAO') {
-            lancheHtml = `<button class="btn btn-sm btn-success btn-lanche-cpt" disabled>Solicitar Lanche</button>`;
+            lancheHtml = `<button class="btn btn-sm btn-success btn-lanche-cpt" disabled>Start Lanche</button>`;
+        } else if (lancheStatus && lancheStatus.startsWith('ATRASADO')) {
+            lancheHtml = renderJustificativaLancheRefeicao(emp.matricula);
         } else {
             lancheHtml = `<span class="text-warning">${emp.lancheStatus}</span>`;
         }
-        
+
+
         let refeicaoHtml = '--:--';
-        if (refeicaoStatus && refeicaoStatus.startsWith('TIMER_REFEICAO.')) {
-            refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${refeicaoStatus.split('.')[1]}"></div>`;
+        if (emp.horaRefeicao && emp.prontidaoRefeicao) {
+            refeicaoHtml = `<span class="text-white">${emp.horaRefeicao}→</span>${ (emp.prontidaoRefeicao && !emp.justificativaProntidaoRefeicao) ? `<span class="text-warning">${emp.prontidaoRefeicao}</span>` : `<span class="text-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.justificativaProntidaoRefeicao}">${emp.prontidaoRefeicao}</span>` }`;
+        } else if (refeicaoStatus && refeicaoStatus.startsWith('TIMER_REFEICAO.')) {
+            refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${refeicaoStatus.split('.')[1]}" data-matricula="${emp.matricula}"></div>`;
         } else if (refeicaoStatus && refeicaoStatus.startsWith('ACAO_')) {
-            refeicaoHtml = `<button class="btn btn-success btn-sm btn-refeicao" data-matricula="${emp.matricula}">Solicitar Refeição</button>`;
+            refeicaoHtml = `<button class="btn btn-success btn-sm btn-refeicao" data-matricula="${emp.matricula}">Start Refeição</button>`;
         } else {
             refeicaoHtml = `<span class="text-warning">${emp.refeicaoStatus}</span>`;
         }
-        
+
         let fimJornadaHtml = '--:--';
         if (emp.fimJornada && !emp.justificativaFimJornada) {
             fimJornadaHtml = '<span class="text-success"><i class="fa-solid fa-check"></i></span>';
@@ -384,15 +412,15 @@ function atualizarTimers() {
 
     document.querySelectorAll('.cronometro-lanche').forEach(el => {
         if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
-            iniciarCronometro(el, el.dataset.starttime, 15);
-            el.dataset.timerIniciado = 'true'; // Impede de reiniciar
+            iniciarCronometro(el, el.dataset.starttime, 15, el.dataset.matricula, layout);
+            el.dataset.timerIniciado = 'true';
         }
     });
 
     document.querySelectorAll('.cronometro-refeicao').forEach(el => {
         if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
-            iniciarCronometro(el, el.dataset.starttime, 60);
-            el.dataset.timerIniciado = 'true'; // Impede de reiniciar
+            iniciarCronometro(el, el.dataset.starttime, 60, el.dataset.matricula, layout);
+            el.dataset.timerIniciado = 'true';
         }
     });
 }
@@ -416,12 +444,16 @@ function listenersDinamicos() {
         if (form.id === 'formFimJornada') {
             aoEnviarFimJornada(evento);
         }
+
+        if (form.id === 'formProntidaoLancheRefeicao') {
+            aoEnviarProntidaoLancheRefeicao(evento);
+        }
     });
 
     tbody.addEventListener('click', (evento) => {
         const target = evento.target.closest('button');
         if (!target) console.log("não achei");
-        
+
         const matricula = target.dataset.matricula;
         if (!matricula) return;
 
@@ -429,13 +461,17 @@ function listenersDinamicos() {
             const select = target.closest('.input-group').querySelector('select');
             aoEnviarEscolhaIntervalo(target, select, matricula);
         }
-        
+
         if (target.classList.contains('btn-lanche')) {
             aoEnviarLanche(target, matricula);
         }
 
         if (target.classList.contains('btn-refeicao')) {
             aoEnviarRefeicao(target, matricula);
+        }
+
+        if (target.classList.contains('btn-prontidao-lanche-refeicao')) {
+            aoEnviarProntidaoLancheRefeicao(target, matricula);
         }
     });
 }
@@ -450,7 +486,7 @@ async function aoEnviarApresentacao(evento) {
     botao.disabled = true;
     botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
     msgContainer.innerHTML = '';
-    
+
     const result = await api.postApresentacao(formData);
     await processarRespostaApresentacao(result, formData);
 }
@@ -459,7 +495,7 @@ async function processarRespostaApresentacao(result, formData) {
     const botao = document.getElementById("botaoApresentar");
     const msgContainer = document.getElementById("form-message");
 
-    if (result.success === true) { 
+    if (result.success === true) {
         document.getElementById("matricula").value = '';
         msgContainer.innerHTML = `<span class="text-success">${result.message || 'Apresentação registrada!'}</span>`;
 
@@ -530,7 +566,7 @@ async function aoEnviarProntidao(evento) {
     evento.preventDefault();
     const form = evento.target;
     const botaoPronto = form.querySelector('#botaoProntidao');
-    const botaoJustificar = form.querySelector('.btn-danger'); 
+    const botaoJustificar = form.querySelector('.btn-danger');
     const containerMessage = form.nextElementSibling;
     const dadosForm = new URLSearchParams(new FormData(form));
 
@@ -543,7 +579,7 @@ async function aoEnviarProntidao(evento) {
     if (select) select.disabled = true;
 
     if (evento.submitter && evento.submitter.id === 'botaoProntidao') {
-        if(botaoPronto) botaoPronto.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+        if (botaoPronto) botaoPronto.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
     } else if (botaoJustificar) {
         botaoJustificar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     }
@@ -578,7 +614,7 @@ async function aoEnviarLanche(botao, matricula) {
     } else {
         alert(result.message || 'Erro ao registrar lanche.');
         botao.disabled = false;
-        botao.innerHTML = 'Solicitar Lanche';
+        botao.innerHTML = 'Start Lanche';
     }
 }
 
@@ -624,20 +660,17 @@ async function aoEnviarRefeicao(botao, matricula) {
     } else {
         alert(result.message || 'Erro ao registrar Refeição.');
         botao.disabled = false;
-        botao.innerHTML = 'Solicitar Refeição';
+        botao.innerHTML = 'Start Refeição';
     }
 }
 
-/**
- * Handler: Envio do formulário de Fim de Jornada (Regra 2)
- */
 async function aoEnviarFimJornada(evento) {
-    evento.preventDefault(); 
+    evento.preventDefault();
     const form = evento.target;
     const botaoNormal = form.querySelector('.botaoFimJornada');
     const botaoJustificativa = form.querySelector('.btn-danger');
-    const dadosForm = new URLSearchParams(new FormData(form));    
-    
+    const dadosForm = new URLSearchParams(new FormData(form));
+
     if (botaoNormal) botaoNormal.disabled = true;
     if (botaoJustificativa) botaoJustificativa.disabled = true;
     const select = form.querySelector('select');
@@ -669,5 +702,47 @@ async function aoEnviarFimJornada(evento) {
         if (botaoNormal) botaoNormal.disabled = false;
         if (botaoJustificativa) botaoJustificativa.disabled = false;
         if (select) select.disabled = false;
+    }
+}
+
+async function aoEnviarProntidaoLancheRefeicao(evento) {
+    evento.preventDefault();
+
+    const form = evento.target;
+    const formData = new URLSearchParams(new FormData(form));
+    const submitter = evento.submitter;
+
+    if (!submitter) return;
+
+    const action = submitter.dataset.action;
+    if (!action) return;
+
+    const btnPronto = form.querySelector('[data-action="pronto"]');
+    const btnJustificar = form.querySelector('[data-action="justificar"]');
+    const select = form.querySelector('select[name="justificativaLancheRefeicao"]');
+
+    [btnPronto, btnJustificar, select].forEach(el => {
+        if (el) el.disabled = true;
+    });
+
+    if (action === 'pronto' && btnPronto){
+        btnPronto.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+    }
+
+    if (action === 'justificar' && btnJustificar) {
+        btnJustificar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+
+    const result = await api.postProntidaoLancheRefeicao(formData);
+
+    if (result.success) {
+        await carregarEMontarTabela();
+    } else {
+        alert('Erro ao registrar Prontidão Lanche/Refeição');
+        [btnPronto, btnJustificar, select].forEach(el => {
+            if (el) el.disabled = false;
+        });
+        if (btnPronto) btnPronto.innerHTML = 'Pronto';
+        if (btnJustificar) btnJustificar.innerHTML = '<i class="fas fa-paper-plane"></i>';
     }
 }

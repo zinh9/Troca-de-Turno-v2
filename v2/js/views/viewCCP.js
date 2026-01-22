@@ -1,8 +1,11 @@
 import { api } from '../services/apiService.js';
 import { iniciarRelogio, atualizarQueryString, iniciarCronometro } from '../utils/helpers.js';
+import { manutencao } from './manutencao.js';
 
 let supervisaoAtual = null;
 let intervaloPollingTabela = null;
+let estadoManutencaoAtivo = false;
+let layout = 'ccp'
 
 export const viewCCP = {
     init: init,
@@ -72,6 +75,21 @@ async function carregarEMontarTabela() {
     const dados = await api.getLocalData(supervisaoAtual, '');
     console.log(dados);
 
+    if (dados && dados.info && dados.info.emManutencao === true) {
+        if (!estadoManutencaoAtivo) {
+            manutencao.init();
+            estadoManutencaoAtivo = true;
+        }
+        return;
+    }
+
+    if (estadoManutencaoAtivo && dados && dados.success) {
+        estadoManutencaoAtivo = false;
+
+        montarLayout();
+        listenersDinamicos();
+    }
+
     if (dados && dados.success) {
         const ultimaEl = document.getElementById('ultima-atualizacao');
         if (ultimaEl) ultimaEl.innerHTML = dados.info.ultimaAtualizacao;
@@ -107,7 +125,7 @@ function montarLinhasTabela(empregados) {
         let nomeHtml = `<span class="text-white" data-bs-toggle="tooltip" data-bs-placement="bottom" title="${emp.matricula}">${emp.nome}</span>`;
         let apresentacaoHtml = `<span class="text-white">${emp.apresentacao}</span>`;
 
-        let prontidaoHtml = '<span>Aguardando...</span>';
+        let prontidaoHtml = '<span class="text-white dots position-relative d-inline-block text-nowrap">Aguardando</span>';
         const agora = new Date();
         const horaApresentacao = new Date(emp.dataHoraApresentacaoCompleta);
         const diffSegundos = Math.floor((agora - horaApresentacao) / 1000);
@@ -125,13 +143,18 @@ function montarLinhasTabela(empregados) {
         } else if (!emp.statusProntidao && diffSegundos > 900 && !emp.chamadaCPT) {
             chamadaHtml = `<button class="btn btn-secondary btn-sm btn-chamada chamada-alerta" data-matricula="${emp.matricula}">ACIONAR VIA RÁDIO</button>`;
         } else if (!emp.statusProntidao && diffSegundos < 900 && !emp.chamadaCPT) {
-            chamadaHtml = '<span class="text-white">Aguardando...</span>';
+            chamadaHtml = '<span class="text-white dots position-relative d-inline-block text-nowrap">Aguardando</span>';
         } else if (emp.chamadaCPT) {
-            chamadaHtml = '<span class="text-white">ACIONADO</span>';
+            // chamadaHtml = (emp.statusProntidao === 'Pronto com atraso' || !emp.statusProntidao) 
+            //     ? '<span class="text-warning">ACIONADO</span>' 
+            //     : '<span class="text-success">ACIONADO</span>';
+            chamadaHtml = '<span class="text-white">ACIONADO</span>'
         }
 
         let lancheHtml = '--:--';
-        if (emp.lancheStatus && emp.lancheStatus.startsWith('TIMER_LANCHE.')) {
+        if (emp.horaLanche && emp.prontidaoLanche) {
+            lancheHtml = `<span class="text-white">${emp.horaLanche}→</span><span class="text-white">ACIONAR</span>`;
+        } else if (emp.lancheStatus && emp.lancheStatus.startsWith('TIMER_LANCHE.')) {
             lancheHtml = `<div class="cronometro-lanche" data-starttime="${emp.lancheStatus.split('.')[1]}"></div>`;
         } else if (emp.lancheCPT) {
             lancheHtml = `<span class="text-white">${emp.lancheCPT}</span>`;
@@ -141,12 +164,16 @@ function montarLinhasTabela(empregados) {
             lancheHtml = `<span class="text-warning">${emp.lancheStatus.split('-')[1]}</span>`;
         } else if (emp.lancheStatus && emp.lancheStatus === 'AGUARDANDO_REFEICAO') {
             lancheHtml = `<button class="btn btn-sm btn-success btn-lanche-cpt" disabled>Liberar Lanche</button>`;
+        } else if (emp.lancheStatus && emp.lancheStatus.startsWith('ATRASADO')) {
+            lancheHtml = `<span class="text-warning">${emp.lancheStatus.split('_')[1]}</span>`;
         } else {
             lancheHtml = `<span class="text-warning">${emp.lancheStatus}</span>`;
         }
 
         let refeicaoHtml = '';
-        if (emp.refeicaoStatus && emp.refeicaoStatus.startsWith('TIMER_REFEICAO.')) {
+        if (emp.prontidaoRefeicao && emp.horaRefeicao) {
+            refeicaoHtml = `<span class="text-white">${emp.horaRefeicao}→</span><span class="text-white">ACIONAR</span>`;
+        } else if (emp.refeicaoStatus && emp.refeicaoStatus.startsWith('TIMER_REFEICAO.')) {
             refeicaoHtml = `<div class="cronometro-refeicao" data-starttime="${emp.refeicaoStatus.split('.')[1]}"></div>`
         } else if (emp.refeicaoCPT) {
             refeicaoHtml = `<span class="text-white">${emp.refeicaoCPT}</span>`;
@@ -223,14 +250,14 @@ function listenersDinamicos() {
 function atualizarTimers() {
     document.querySelectorAll('.cronometro-lanche').forEach(el => {
         if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
-            iniciarCronometro(el, el.dataset.starttime, 15);
-            el.dataset.timerIniciado = 'true'; // Impede de reiniciar
+            iniciarCronometro(el, el.dataset.starttime, 15, null, layout);
+            el.dataset.timerIniciado = 'true'; 
         }
     });
 
     document.querySelectorAll('.cronometro-refeicao').forEach(el => {
         if (el && el.dataset.starttime && !el.dataset.timerIniciado) {
-            iniciarCronometro(el, el.dataset.starttime, 60);
+            iniciarCronometro(el, el.dataset.starttime, 60, null, layout);
             el.dataset.timerIniciado = 'true'; // Impede de reiniciar
         }
     });
